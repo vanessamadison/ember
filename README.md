@@ -1,0 +1,165 @@
+# EMBER
+
+**Encrypted Mesh Based Emergency Response — Community Resilience OS**
+
+[![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
+[![React Native](https://img.shields.io/badge/React_Native-0.76-61dafb.svg)](https://reactnative.dev)
+[![Expo](https://img.shields.io/badge/Expo_SDK-52-000020.svg)](https://expo.dev)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.3-3178c6.svg)](https://www.typescriptlang.org)
+
+---
+
+When disasters strike, the communication infrastructure people depend on fails first. Cell towers go down. Internet disappears. Cloud platforms become unreachable. The communities that need coordination most urgently are left completely disconnected. Existing emergency tools (FEMA apps, Citizen, Nextdoor) all require functioning internet and route data through centralized servers, making them useless precisely when needed most.
+
+EMBER solves this with a zero-knowledge, offline-first architecture. All community data is encrypted on device before it ever touches any network. In peacetime, neighbors coordinate resources, complete preparedness drills, and store emergency plans locally. When crisis hits, EMBER switches to mesh communication via LoRa radio (Meshtastic protocol), enabling encrypted messaging and coordination across 1-5km with zero internet dependency.
+
+## Architecture
+
+EMBER is a three-tier system. Each tier is independent:
+
+**Tier 1: EMBER App** (this repository) — Free, open source (AGPL v3). React Native mobile app with offline-first database, zero-knowledge encryption, community coordination, resource tracking, preparedness gamification, and check-in system. Works on any phone. No special hardware required. This is the entry point and the largest user base.
+
+**Tier 2: EMBER Node Kits** — Pre-configured Meshtastic relay nodes with solar panels and weatherproof enclosures. Extend mesh communication range. Run indefinitely without grid power. Paired with the app via BLE.
+
+**Tier 3: EMBER Communicator** — Standalone device (T-Deck Plus based) with keyboard, screen, and LoRa radio. Zero phone dependency. Pre-loaded with community emergency plans, frequency charts, and offline maps. Solar chargeable.
+
+## Features
+
+- **Offline-first database** — WatermelonDB on SQLite. All data available without connectivity
+- **Zero-knowledge encryption** — NaCl secretbox (XSalsa20-Poly1305). Keys derived from community passphrase via PBKDF2
+- **Community coordination** — Create/join communities, manage members, assign roles
+- **Resource tracking** — Categorized inventory (Water, Food, Medical, Power, Comms) with critical thresholds
+- **Preparedness gamification** — Drills with XP, achievements, readiness scores, daily check-in streaks
+- **Emergency plans** — Encrypted offline storage with printable analog kit
+- **Crisis mode** — Simplified UI, mesh-first communication, power-optimized operation
+- **Mesh network ready** — BLE bridge to Meshtastic LoRa hardware (Tier 2 integration)
+- **CRDT sync** — Conflict-free replicated data types for offline conflict resolution
+
+## Tech Stack
+
+| Layer | Technology |
+|-------|-----------|
+| Framework | Expo SDK 52 + Expo Router |
+| Language | TypeScript (strict) |
+| Database | WatermelonDB (SQLite native, LokiJS web) |
+| Encryption | tweetnacl (NaCl secretbox), expo-crypto (PBKDF2) |
+| State | Zustand + React Context |
+| Sync | Custom CRDT engine (GCounter, PNCounter, LWWRegister, HLC) |
+| Key Storage | expo-secure-store (device-encrypted) |
+| Build | EAS Build + EAS Submit |
+
+## Getting Started
+
+### Prerequisites
+
+- Node.js 18+
+- npm or yarn
+- Expo CLI: `npm install -g expo-cli`
+- EAS CLI: `npm install -g eas-cli`
+- iOS: Xcode 15+ (for local builds)
+- Android: Android Studio (for local builds)
+
+### Install
+
+```bash
+git clone https://github.com/ember-resilience/ember.git
+cd ember
+npm install
+```
+
+### Development
+
+EMBER uses native modules (WatermelonDB) and requires a development build. Expo Go will not work.
+
+```bash
+# Create development build
+eas build --profile development --platform ios
+eas build --profile development --platform android
+
+# Start dev server
+npx expo start --dev-client
+```
+
+### Production Build
+
+```bash
+# Build for app stores
+eas build --profile production --platform all
+
+# Submit to stores
+eas submit --platform ios
+eas submit --platform android
+```
+
+## Project Structure
+
+```
+ember/
+├── app/                          # Expo Router screens
+│   ├── _layout.tsx               # Root layout (providers)
+│   ├── index.tsx                 # Splash screen
+│   ├── onboard/                  # Onboarding flow
+│   │   ├── index.tsx             # Welcome / choice
+│   │   ├── create.tsx            # Create community
+│   │   └── join.tsx              # Join community
+│   └── (tabs)/                   # Main app tabs
+│       ├── _layout.tsx           # Tab navigation
+│       ├── index.tsx             # Dashboard
+│       ├── community.tsx         # Members
+│       ├── resources.tsx         # Supply tracking
+│       ├── drills.tsx            # Preparedness
+│       ├── plans.tsx             # Emergency plans
+│       └── settings.tsx          # Configuration
+├── src/
+│   ├── components/               # Reusable UI (12 components)
+│   ├── db/                       # WatermelonDB layer
+│   │   ├── schema.ts             # Database schema (8 tables)
+│   │   ├── models/               # ORM models
+│   │   ├── seed.ts               # Demo data
+│   │   └── index.ts              # DB initialization
+│   ├── crypto/                   # Zero-knowledge encryption
+│   │   ├── keyDerivation.ts      # PBKDF2 key derivation
+│   │   ├── encryption.ts         # NaCl secretbox encrypt/decrypt
+│   │   └── index.ts              # CryptoManager class
+│   ├── sync/                     # CRDT sync engine
+│   │   ├── crdt.ts               # GCounter, PNCounter, LWW, HLC
+│   │   ├── peerSync.ts           # Peer sync manager
+│   │   └── index.ts
+│   ├── context/                  # State management
+│   ├── hooks/                    # Custom React hooks
+│   ├── theme/                    # Three-mode theme system
+│   ├── constants/                # App constants
+│   └── utils/                    # Utility functions
+├── assets/                       # Logo, splash, icons
+├── docs/
+│   └── ARCHITECTURE.md           # Full technical specification
+├── package.json
+├── app.json                      # Expo config
+├── eas.json                      # EAS Build config
+├── tsconfig.json
+└── LICENSE                       # AGPL v3
+```
+
+## Contributing
+
+EMBER is open source under AGPL v3. Contributions welcome.
+
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/your-feature`)
+3. Commit your changes
+4. Push to the branch
+5. Open a Pull Request
+
+Please read `docs/ARCHITECTURE.md` before contributing to understand the encryption and sync architecture.
+
+## License
+
+GNU Affero General Public License v3.0 — see [LICENSE](LICENSE).
+
+This means: you can use, modify, and distribute EMBER freely. If you modify and deploy it as a network service, you must release your modifications under AGPL v3.
+
+## Credits
+
+Built by [ILLAPEX LLC](https://illapex.com) and [Lirio Labs](https://liriolabs.com).
+
+Created by Vanessa Madison — security engineer, creative technologist, and community resilience advocate.
