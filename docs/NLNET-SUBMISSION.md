@@ -1,133 +1,130 @@
 # NLnet NGI Zero Commons Fund — EMBER Submission
+## Copy/paste guide matching the exact form at nlnet.nl/propose
 
 **Deadline: April 1, 2026, 12:00 CEST (noon) = 4:00 AM MDT**
-**Form: https://nlnet.nl/propose/**
-**Fund: NGI Zero Commons Fund**
 
 ---
 
-## FIELD: Project name
-
-EMBER — Encrypted Mesh Based Emergency Response
-
-## FIELD: Website / wiki
-
-https://github.com/nessakodo/ember
-
-## FIELD: Abstract (2-10 sentences)
-
-EMBER is a zero-knowledge, offline-first community resilience operating system. When disasters strike, existing emergency tools (FEMA, Citizen, Nextdoor) fail because they depend on centralized internet infrastructure that goes down first. EMBER solves this with end-to-end encrypted local-first architecture: communities coordinate resources, run preparedness drills, and store emergency plans on-device with zero server dependency. When connectivity fails, EMBER switches to mesh communication via LoRa radio (Meshtastic protocol), enabling encrypted peer-to-peer coordination across 1-5km with no internet required. All community data is encrypted using NaCl secretbox (XSalsa20-Poly1305) with keys derived from community passphrases via PBKDF2, ensuring zero-knowledge privacy even from the developers. EMBER is fully open source under AGPL v3, built with React Native and WatermelonDB, and designed to serve any community anywhere in the world.
-
-## FIELD: Have you been involved with projects or organisations relevant to this project before? And describe any other relevant projects.
-
-Yes. EMBER is developed by ILLAPEX LLC (illapex.com), a security-focused technology company, and Lirio Labs (liriolabs.com), a software and AI workflow studio. The project lead, Vanessa Madison, is a security engineer and creative technologist with experience in cryptographic systems, network security, and community resilience technology. This project grows from direct experience with communication failures during natural disasters and a deep understanding of the security requirements for protecting vulnerable communities during crises.
-
-## FIELD: Requested amount (between 5000 and 50000 euros)
-
-50000
-
-## FIELD: Explain what the relevant advantages of the project are over existing comparable solutions
-
-Current emergency communication tools have a critical architectural flaw: they require functioning internet infrastructure. FEMA apps, Citizen, Nextdoor, and Zello all route data through centralized cloud servers, making them useless precisely when communities need them most. Even Signal and Briar, while encrypted, still require internet or direct Bluetooth proximity.
-
-EMBER's advantages:
-
-1. Zero-knowledge encryption by default. All community data is encrypted on-device before touching any network. The server (when used for peacetime sync) never sees plaintext. This protects vulnerable communities (undocumented immigrants, domestic violence survivors, activists) whose emergency data could be weaponized.
-
-2. True offline-first with mesh fallback. WatermelonDB on SQLite ensures all data is available without connectivity. When internet fails, EMBER bridges to LoRa mesh hardware (Meshtastic) via BLE, enabling encrypted communication across 1-5km per hop with multi-hop relay capability.
-
-3. CRDT-based conflict resolution. Custom conflict-free replicated data types (GCounter, PNCounter, LWW registers with hybrid logical clocks) ensure data consistency across disconnected peers without any central authority.
-
-4. Community-centric rather than individual-centric. EMBER treats the neighborhood as the unit of resilience, not the individual. Resource tracking, role assignment, preparedness gamification, and shared emergency plans build collective capacity before disaster strikes.
-
-5. Three operational modes. Peacetime mode builds community preparedness through drills and resource coordination. Crisis mode strips the UI to essentials and prioritizes mesh communication. Recovery mode tracks community restoration progress.
-
-6. Hardware-agnostic mesh integration. EMBER works on any smartphone without special hardware. Optional LoRa node kits and standalone communicators extend capability but are not required.
-
-7. Fully open source (AGPL v3). No vendor lock-in, no data extraction, no surveillance capitalism. Communities own their resilience infrastructure.
-
-## FIELD: Describe the technology, what you are going to work on, and what the expected result will look like
-
-EMBER is a React Native mobile application (Expo SDK 52) with a three-tier architecture:
-
-Core Technology Stack:
-- React Native with Expo Router for cross-platform mobile (iOS, Android)
-- WatermelonDB (SQLite native) for offline-first reactive database
-- tweetnacl (NaCl secretbox / XSalsa20-Poly1305) for zero-knowledge encryption
-- PBKDF2 key derivation (100K iterations) via expo-crypto
-- Custom CRDT sync engine (GCounter, PNCounter, LWWRegister, Hybrid Logical Clocks)
-- Zustand for state management
-- BLE bridge to Meshtastic LoRa hardware for mesh networking
-
-What we will work on with this grant:
-1. Complete the mobile application from current MVP to production-ready release on iOS and Android app stores
-2. Implement and audit the full zero-knowledge encryption pipeline (key derivation, secretbox encrypt/decrypt, secure key storage, key rotation)
-3. Build the BLE-to-Meshtastic bridge for mesh communication with 237-byte payload optimization
-4. Implement CRDT synchronization across mesh-connected peers
-5. Build the preparedness gamification engine (drills, XP, achievements, readiness scores)
-6. Conduct security audit of the encryption and sync architecture
-7. Create documentation for community deployment and mesh network setup
-8. Release on F-Droid and app stores
-
-Expected result: A production-ready, security-audited mobile application that any community can download for free, create an encrypted local community network, coordinate emergency resources, and seamlessly fall back to mesh communication when infrastructure fails. All code released under AGPL v3.
-
-## FIELD: Describe the ecosystem this project belongs to
-
-EMBER sits at the intersection of several ecosystems:
-
-Emergency Communication: Meshtastic (open source LoRa mesh), Briar (delay-tolerant P2P messaging), Disaster.Radio (community mesh networks). EMBER complements these by providing the application layer for community coordination that these mesh protocols lack.
-
-Offline-First Software: WatermelonDB, CRDTs, local-first software movement (Ink & Switch research). EMBER applies these principles specifically to emergency resilience.
-
-Privacy-Preserving Communication: Signal Protocol, NaCl/libsodium cryptography, zero-knowledge architectures. EMBER brings zero-knowledge principles to community emergency data.
-
-Community Resilience: Mutual Aid networks, Community Emergency Response Teams (CERT), neighborhood preparedness programs. EMBER digitizes and encrypts the coordination these groups do on paper.
-
-Open Hardware: Meshtastic-compatible LoRa devices (LILYGO T-Beam, Heltec, RAK WisBlock), solar charging systems. EMBER's Tier 2 node kits and Tier 3 communicators build on this ecosystem.
-
-## FIELD: What is the existing state of the project?
-
-EMBER is in active development with a functional MVP:
-- Complete React Native project structure with Expo SDK 52 and Expo Router
-- WatermelonDB schema and models for 8 data tables (communities, members, resources, check-ins, drills, emergency plans, messages, achievements)
-- Zero-knowledge encryption module (NaCl secretbox with PBKDF2 key derivation)
-- Custom CRDT sync engine (GCounter, PNCounter, LWWRegister, HLC)
-- Peer sync manager with Meshtastic payload optimization (237-byte limit)
-- Three-mode theme system (Peacetime, Crisis, Recovery)
-- 12 reusable React Native UI components
-- 13 Expo Router screens (splash, onboarding, dashboard, community, resources, drills, plans, settings)
-- Interactive browser demo for testing and review
-- Full technical architecture documentation
-- CI/CD pipeline via GitHub Actions and EAS Build
-- Repository: https://github.com/nessakodo/ember
-
-The core architecture is complete. Grant funding will take this from MVP to production-ready, security-audited release.
-
-## FIELD: Are there significant obstacles or dependencies you foresee?
-
-1. Apple Developer Program approval is pending for iOS App Store distribution. Android distribution via Google Play and F-Droid has no blockers.
-
-2. Security audit of the encryption pipeline should be conducted by an independent party before production release. We have budgeted for this in the grant.
-
-3. Meshtastic BLE integration requires testing across multiple hardware variants (T-Beam, T-Deck, Heltec, RAK). We plan to acquire test hardware with grant funds.
-
-4. CRDT sync across mesh networks with high latency and packet loss requires careful testing. Our current implementation handles this theoretically but needs field testing with real mesh hardware.
-
-5. Community adoption requires partnerships with existing mutual aid networks and CERT teams. We have identified initial partner communities for pilot deployment.
-
-No fundamental technical obstacles exist. The core cryptographic primitives (NaCl, PBKDF2) are well-established. The mesh protocol (Meshtastic) is mature and actively maintained. The primary work is integration, hardening, and user experience refinement.
-
-## FIELD: Thematic topic (select from list)
-
-Privacy and Trust enhancing technologies
-Decentralised software infrastructures
-Middleware and platform technologies (data and calculation)
+### Please select a call
+> **NGI Zero Commons Fund**
 
 ---
 
-## Contact Information
+### Contact information
 
-- **Name**: Vanessa Madison
-- **Email**: thatcosmicbutterfly@gmail.com
-- **Organization**: ILLAPEX LLC / Lirio Labs
+- **Your name**: Vanessa Madison
+- **Email address**: thatcosmicbutterfly@gmail.com
+- **Phone number**: [your phone]
+- **Organisation**: ILLAPEX LLC / Lirio Labs
 - **Country**: United States
+
+---
+
+### Proposal name
+> EMBER — Encrypted Mesh Based Emergency Response
+
+### Website / wiki
+> https://github.com/vanessamadison/ember
+
+---
+
+### Abstract: Can you explain the whole project and its expected outcome(s).
+
+EMBER is a zero-knowledge encrypted, offline-first mobile application that enables communities to coordinate emergency preparedness and response without relying on centralized internet infrastructure. When disasters strike, every mainstream emergency tool (FEMA apps, Citizen, Nextdoor) fails because they depend on cloud servers. EMBER stores all community data in an on-device encrypted database (WatermelonDB on SQLite) using NaCl secretbox encryption (XSalsa20-Poly1305) with keys derived from community passphrases via PBKDF2. No server ever sees plaintext data.
+
+In peacetime, communities use EMBER to track supplies, assign roles, store emergency plans, run preparedness drills, and build readiness through gamification. When connectivity fails, EMBER switches to mesh communication via LoRa radio (Meshtastic protocol), enabling encrypted peer-to-peer messaging across 1-5km with multi-hop relay. A custom CRDT sync engine (GCounter, PNCounter, LWW registers with hybrid logical clocks) resolves conflicts across disconnected peers without central authority.
+
+The expected outcome is a production-ready, security-audited mobile application (iOS, Android, F-Droid) that any community in the world can download for free, create an encrypted local resilience network, and seamlessly fall back to mesh communication when infrastructure fails. All code is released under AGPL v3.
+
+---
+
+### Have you been involved with projects or organisations relevant to this project before? And if so, can you tell us a bit about your contributions?
+
+Yes. EMBER is developed through ILLAPEX LLC (illapex.com), a security-focused technology company, and Lirio Labs (liriolabs.com), a software and AI workflow studio, both founded by the project lead. Vanessa Madison is a security engineer and creative technologist with hands-on experience in cryptographic systems, network security architecture, and community-centered technology design. This project grows directly from witnessing communication failures during natural disasters and understanding the security requirements for protecting vulnerable community data during crises.
+
+---
+
+### Requested Amount (in Euro)
+> 50000
+
+### Explain what the requested budget will be used for? Does the project have other funding sources, both past and present?
+
+Budget breakdown (€50,000 total):
+
+Development — €28,000
+- Production hardening of React Native app (€12,000, ~300 hrs at €40/hr)
+- Meshtastic BLE bridge integration and mesh sync (€8,000, ~200 hrs)
+- Security audit preparation and remediation (€4,000, ~100 hrs)
+- App store submission, CI/CD, testing infrastructure (€4,000, ~100 hrs)
+
+Security audit — €10,000
+- Independent third-party audit of encryption pipeline, key management, and CRDT sync
+- Penetration testing of mesh communication layer
+
+Hardware and testing — €4,000
+- LoRa test hardware (T-Beam, T-Deck, Heltec, RAK variants)
+- Multi-device mesh network testing rigs
+- Solar charging components for field testing
+
+Community pilot — €5,000
+- Partner community onboarding and documentation
+- Field testing with 3-5 pilot communities
+- Localization for initial target languages
+
+Documentation and outreach — €3,000
+- Technical documentation, deployment guides, mesh setup guides
+- Community governance framework documentation
+- Conference presentations and ecosystem engagement
+
+No other funding sources at present. This is the initial grant application. A parallel concept note has been submitted to the Open Technology Fund Internet Freedom Fund.
+
+---
+
+### Compare your own project with existing or historical efforts.
+
+Meshtastic: Open source LoRa mesh protocol. Provides raw mesh communication but no application-level community coordination, no encrypted database, no resource tracking, and requires technical expertise to operate. EMBER uses Meshtastic as its mesh transport layer and builds the accessible community coordination app on top.
+
+Briar: Delay-tolerant P2P encrypted messenger. Limited to direct Bluetooth/WiFi proximity (10-50m range). No multi-hop mesh relay across kilometers, no community coordination features, no resource tracking, no offline database. EMBER extends the communication range to kilometers via LoRa and adds full community resilience features.
+
+Signal: Excellent encrypted messaging but completely dependent on internet infrastructure. No offline capability, no mesh fallback, no community coordination tools. Useless when cell towers and internet fail.
+
+Disaster.Radio: Community mesh network for text communication. No encryption, no community coordination, limited recent development activity.
+
+FEMA App / Citizen / Nextdoor: Centralized, internet-dependent, no end-to-end encryption, user data harvested by third parties. All fail precisely when communities need them most.
+
+EMBER is unique in combining zero-knowledge encryption + offline-first database + LoRa mesh networking + community coordination + preparedness gamification in a single open source mobile application.
+
+---
+
+### What are significant technical challenges you expect to solve during the project, if any?
+
+1. BLE-to-Meshtastic bridge reliability: Maintaining stable BLE connections between the React Native app and Meshtastic LoRa hardware across diverse Android/iOS devices and firmware versions. We have designed a connection manager with automatic reconnection and message queueing, but real-world testing across hardware variants is needed.
+
+2. CRDT sync over lossy mesh networks: Our CRDT engine handles conflict resolution mathematically, but mesh networks introduce high latency, packet loss, and 237-byte payload limits. We have implemented delta compression and message prioritization, but field testing with real mesh topologies will be critical.
+
+3. Key management UX: Making zero-knowledge encryption accessible to non-technical users. Community passphrases must be strong enough for security but memorable enough for practical use. Key rotation during community membership changes needs to be seamless.
+
+4. Power optimization in crisis mode: During emergencies, device battery is critical. The app must minimize BLE scanning, radio transmissions, and screen wake while maintaining communication responsiveness.
+
+5. Cross-platform encryption consistency: Ensuring identical encryption output across iOS and Android with different native crypto implementations under expo-crypto.
+
+---
+
+### Describe the ecosystem of the project, and how you will engage with relevant actors and promote the outcomes?
+
+EMBER sits at the intersection of four active ecosystems:
+
+Open source mesh networking: Meshtastic community (200K+ devices deployed), Disaster.Radio, LoRa Alliance. We will contribute upstream improvements to Meshtastic BLE libraries and publish our mesh application protocol as an open specification.
+
+Local-first / offline-first software: Ink & Switch research community, WatermelonDB, CRDT ecosystem (Automerge, Yjs). We will publish our domain-specific CRDT implementations and sync protocol documentation.
+
+Privacy-preserving technology: NaCl/libsodium ecosystem, Signal Protocol community, NGI Zero privacy projects. We will engage with the NGI Zero community for security review and publish our zero-knowledge architecture as a reusable pattern.
+
+Community resilience: Community Emergency Response Teams (CERT), mutual aid networks, preparedness organizations. We have identified initial partner communities for pilot deployment and will create deployment toolkits for community organizers.
+
+Promotion: Conference presentations (FOSDEM, CCC, Meshtastic community events), blog posts documenting architecture decisions, GitHub Discussions for community input, and partnership with existing mutual aid networks for real-world adoption.
+
+---
+
+### Attachments
+> Upload: EMBER-Technical-Overview.pdf (being created now)

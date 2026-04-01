@@ -113,5 +113,5 @@ The architecture is intentionally designed for zero recurring infrastructure cos
 - **Name**: Vanessa Madison
 - **Email**: thatcosmicbutterfly@gmail.com
 - **Organization**: ILLAPEX LLC / Lirio Labs
-- **Website**: https://github.com/nessakodo/ember
+- **Website**: https://github.com/vanessamadison/ember
 - **Country**: United States
