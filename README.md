@@ -9,6 +9,54 @@
 
 ---
 
+<div align="center">
+<img src="assets/mockups/main.png" width="280" alt="EMBER Main Screen" />
+<br />
+<em>Offline-first. Zero-knowledge encrypted. No infrastructure required.</em>
+</div>
+
+---
+
+## Screenshots
+
+### Peacetime Mode
+
+Peacetime mode is where communities prepare. Track supplies, run drills, manage members, store emergency plans, and build readiness — all encrypted and offline-first.
+
+<p align="center">
+<img src="assets/mockups/peacetime-home.png" width="220" alt="Peacetime Dashboard" />
+<img src="assets/mockups/peacetime-people.png" width="220" alt="Community Members" />
+<img src="assets/mockups/peacetime-supply.png" width="220" alt="Supply Tracking" />
+</p>
+<p align="center">
+<img src="assets/mockups/peacetime-drills.png" width="220" alt="Preparedness Drills" />
+<img src="assets/mockups/peacetime-plans.png" width="220" alt="Emergency Plans" />
+<img src="assets/mockups/peacetime-config.png" width="220" alt="Configuration" />
+</p>
+
+<p align="center">
+<sub><strong>Left to right:</strong> Dashboard with readiness scores & community map · Member directory with roles & skills · Categorized supply inventory · Preparedness drills with XP system · Encrypted emergency plans & printable analog kit · Encryption, mesh & privacy settings</sub>
+</p>
+
+### Crisis Mode
+
+When disaster strikes, EMBER shifts to a red-alert interface optimized for urgency. Mesh networking activates for zero-internet communication via LoRa radio.
+
+<p align="center">
+<img src="assets/mockups/crisis-status.png" width="220" alt="Crisis Status" />
+<img src="assets/mockups/crisis-supply.png" width="220" alt="Crisis Supply" />
+</p>
+<p align="center">
+<img src="assets/mockups/crisis-mesh.png" width="220" alt="Mesh Network" />
+<img src="assets/mockups/crisis-plans.png" width="220" alt="Crisis Plans" />
+</p>
+
+<p align="center">
+<sub><strong>Left to right:</strong> Crisis dashboard with safety check-ins · Supply levels with critical alerts · Live mesh network with encrypted broadcast messaging · Emergency plans accessible offline</sub>
+</p>
+
+---
+
 ## Quick Demo
 
 **No install required.** Clone and open the interactive prototype in your browser:
