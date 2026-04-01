@@ -9,6 +9,21 @@
 
 ---
 
+## Quick Demo
+
+**No install required.** Clone and open the interactive prototype in your browser:
+
+```bash
+git clone https://github.com/ember-resilience/ember.git
+cd ember/demo
+open index.html    # macOS
+# or: xdg-open index.html (Linux) / start index.html (Windows)
+```
+
+This renders the full EMBER UI prototype with peacetime mode, crisis simulation, community management, resource tracking, drill system, emergency plans, and mesh network visualization. All interactive, all in-browser.
+
+---
+
 When disasters strike, the communication infrastructure people depend on fails first. Cell towers go down. Internet disappears. Cloud platforms become unreachable. The communities that need coordination most urgently are left completely disconnected. Existing emergency tools (FEMA apps, Citizen, Nextdoor) all require functioning internet and route data through centralized servers, making them useless precisely when needed most.
 
 EMBER solves this with a zero-knowledge, offline-first architecture. All community data is encrypted on device before it ever touches any network. In peacetime, neighbors coordinate resources, complete preparedness drills, and store emergency plans locally. When crisis hits, EMBER switches to mesh communication via LoRa radio (Meshtastic protocol), enabling encrypted messaging and coordination across 1-5km with zero internet dependency.

@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>EMBER — Community Resilience OS</title>
+  <meta name="description" content="Encrypted Mesh Based Emergency Response. Offline-first community coordination." />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔥</text></svg>" />
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: #0a0a0a; display: flex; justify-content: center; min-height: 100vh; }
+    #root { width: 100%; }
+    @media (min-width: 480px) {
+      body { align-items: center; padding: 20px; }
+      #root { max-width: 420px; border-radius: 20px; overflow: hidden; box-shadow: 0 0 80px rgba(212,165,116,0.08), 0 0 0 1px rgba(255,255,255,0.04); min-height: 90vh; }
+    }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.3.1/umd/react.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.3.1/umd/react-dom.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.26.2/babel.min.js"></script>
+  <script type="text/babel" src="app.jsx"></script>
+  <script type="text/babel">
+    ReactDOM.createRoot(document.getElementById('root')).render(React.createElement(Ember));
+  </script>
+</body>
+</html>

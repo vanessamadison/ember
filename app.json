@@ -21,7 +21,11 @@
         "NSBluetoothAlwaysUsageDescription": "EMBER uses Bluetooth to communicate with mesh network nodes for offline emergency communication.",
         "NSBluetoothPeripheralUsageDescription": "EMBER uses Bluetooth to communicate with mesh network nodes.",
         "NSLocalNetworkUsageDescription": "EMBER uses local networking for peer-to-peer encrypted data sync.",
-        "UIBackgroundModes": ["bluetooth-central", "bluetooth-peripheral"]
+        "UIBackgroundModes": [
+          "bluetooth-central",
+          "bluetooth-peripheral"
+        ],
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
@@ -69,8 +73,9 @@
         "origin": false
       },
       "eas": {
-        "projectId": "YOUR_EAS_PROJECT_ID"
+        "projectId": "984f417e-b573-4588-9329-5fedfe6ae58b"
       }
-    }
+    },
+    "owner": "k11ten"
   }
 }
