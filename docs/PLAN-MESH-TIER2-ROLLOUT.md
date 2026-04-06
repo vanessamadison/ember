@@ -1,0 +1,144 @@
+# Plan: Mesh Tier 2 rollout (application layer → product)
+
+| Field | Value |
+|--------|--------|
+| Author | EMBER maintainers |
+| Date | 2026-04-06 |
+| Branch / PR | (set when work starts) |
+| Status | Draft |
+
+Related: [MESHTASTIC-BLE.md](./MESHTASTIC-BLE.md) (current prototype), [ARCHITECTURE.md](./ARCHITECTURE.md) §10.
+
+## 1. Problem
+
+The app can pair with a Meshtastic radio and complete a **config handshake**, but mesh is not yet a **safe, user-visible EMBER channel** for community data. We need a phased path from “bytes on BLE” to **encrypted EMBER payloads over LoRa**, **production-ready BLE UX**, **reliable transports**, **testability**, and **crisis-mode alignment**—without blurring trust boundaries between Meshtastic link crypto and EMBER community crypto.
+
+## 2. Scope
+
+**In scope (priority order)**
+
+1. **Mesh application layer** — Define how EMBER encapsulates data for Meshtastic (portnum strategy, framing, size limits, versioning). Payloads remain **ciphertext or signed app-level blobs** derived from existing EMBER keys/sync; no mesh as authority for community identity.
+2. **Production BLE UX** — Permissions (iOS/Android), Bluetooth power and authorization states, actionable copy, graceful degradation when the radio is not in BLE/API mode.
+3. **Robustness** — Serialize or queue ToRadio writes, send `disconnect` ToRadio on teardown where appropriate, basic retry/backoff for transient ATT errors.
+4. **Hardware / CI** — Recorded byte fixtures or HIL hooks for regression tests of framing + selected protobuf paths.
+5. **Product alignment** — Surface mesh status and sends in **crisis** flows (within mockup direction) when the lower layers are stable enough not to mislead users.
+
+**Out of scope (for this plan)**
+
+- Replacing EMBER passphrase-derived sync with Meshtastic channel PSK as the community root of trust.
+- OTA firmware orchestration for third-party radios (document only; no commitment).
+- Full network topology graph until node DB ingestion is product-prioritized.
+
+## 3. Security and privacy boundaries
+
+- **Data classification:** Mesh payload proposal must carry only **already-encrypted or intentionally public metadata** (e.g. bundle version, community **public** id if needed for routing UX). No plaintext PII on mesh unless explicitly approved in a future threat-model update.
+- **Trust assumptions:** Meshtastic devices and other mesh participants are **untrusted** for EMBER auth. Relay and sneaker-net verification paths remain authoritative for merge decisions.
+- **Crypto touchpoints:** Reuse `src/crypto/`, sync ciphertext from Phase B (`src/sync/`). New code must not generate parallel key hierarchies without ADR. Document which field is MAC’d or encrypted before `MeshPacket` assembly.
+- **Permissions / platform:** BLE usage strings, Android 12+ Bluetooth permissions, background limitations; document “must use dev build” until policy is complete.
+
+## 4. Design summary
+
+**Phase A — Application layer (priority 1)**
+
+- Choose **portnum**: prefer an **App-specific / experimental** Meshtastic port range per current `portnums` enum; reserve a constant in `src/mesh/` (e.g. `EMBER_PORTNUM`) and document mapping in MESHTASTIC-BLE.md.
+- **Envelope:** Version byte + community **public** handle (e.g. hash of community id) + ciphertext blob length + ciphertext + optional truncated auth tag reference (if not inside ciphertext). Cap size under MTU / airtime guidance; chunk if needed (later sub-phase).
+- **Send path:** API such as `sendEmberMeshPayload(bytes: Uint8Array, meta)` → build `MeshPacket` / `Data` protobuf → `ToRadio` **packet** variant (not only want_config). Integrate with session after handshake complete.
+- **Receive path:** FromRadio **packet** decoding → verify envelope version → pass ciphertext to existing decrypt/merge pipeline or a stub queue until merge rules are defined.
+
+**Phase B — Production BLE UX (priority 2)**
+
+- Centralize Bluetooth state UI strings; Settings + optional crisis banner when radio disconnected.
+- Pre-connect checklist: adapter on, permission granted, short troubleshooting link (in-repo doc anchor).
+
+**Phase C — Robustness (priority 3)**
+
+- Single-writer queue for ToRadio from JS; await completion before next write.
+- On disconnect: `encodeDisconnect()` + cancel FromNum + `resetStream()`.
+
+**Phase D — CI / fixtures (priority 4)**
+
+- Commit small **golden files** (hex or base64) for: framed `want_config`, one `FromRadio` myInfo, one encapsulated EMBER envelope parser test (no live radio in CI).
+
+**Phase E — Product alignment (priority 5)**
+
+- Crisis tab or mesh subsection: connection state, last send/recv time, **no fake** “mesh wide” guarantees—copy reviewed against MVP-GUIDE.
+
+```mermaid
+flowchart LR
+  subgraph ember [EMBER app crypto]
+    K[Community keys / sync ciphertext]
+  end
+  subgraph mesh [Meshtastic path]
+    BLE[BLE bridge]
+    TR[ToRadio / FromRadio]
+    MP[MeshPacket + portnum]
+  end
+  K --> Env[EMBER envelope]
+  Env --> MP
+  BLE --> TR
+  TR --> MP
+```
+
+## 5. Acceptance criteria
+
+**Phase A — Application layer**
+
+1. Given a completed config handshake, when the app sends an EMBER mesh message, then the radio accepts a **valid** `ToRadio.packet` that decodes on a serial/API client as the chosen portnum with the envelope prefix matching spec.
+2. Given a received mesh packet for the EMBER portnum, when the payload passes envelope checks, then ciphertext is handed to a single documented entry point (stub or real merge) without crashing on malformed input.
+
+**Phase B — BLE UX**
+
+3. When Bluetooth is Unauthorized or PoweredOff, the Settings mesh section shows **specific** copy and does not loop failed scans silently.
+4. iOS and Android permission strings exist and match actual capability requests (verified in dev builds).
+
+**Phase C — Robustness**
+
+5. When three sends are triggered in quick succession, then writes complete in order without characteristic overlap errors under normal conditions (manual or integration test notes).
+6. When the user disconnects, then the app sends disconnect ToRadio (best-effort) and clears subscriptions without leaking listeners across reconnects.
+
+**Phase D — CI**
+
+7. CI runs tests that parse committed fixtures for framing + envelope without `react-native-ble-plx` hardware.
+
+**Phase E — Product**
+
+8. Crisis UI entry shows mesh connection state consistent with Settings; no contradictory claims vs MESHTASTIC-BLE.md trust model.
+
+## 6. Test plan
+
+| Criterion | Test level | Location |
+|-----------|------------|----------|
+| 1 – ToRadio packet shape | unit + manual serial tap | `__tests__/mesh/` + manual with Meshtastic CLI |
+| 2 – Receive entry | unit | `__tests__/mesh/` envelope parser |
+| 3–4 – BLE states | manual | iOS + Android dev clients |
+| 5 – Write queue | integration / manual | Settings stress or detox (optional) |
+| 6 – Teardown | manual | disconnect/reconnect 10x |
+| 7 – Fixtures | CI unit | `__tests__/mesh/fixtures/` |
+| 8 – Crisis copy | manual QA | crisis screen review |
+
+## 7. Rollout and rollback
+
+- Roll out behind a **feature flag** or `__DEV__`-only send button until Phase A criteria pass on hardware.
+- Rollback: disable send UI; keep read-only diagnostics; protobuf schema changes must bump envelope version.
+
+## 8. Open questions
+
+- Exact **portnum** value to reserve vs conflict with community forks (document in repo + optional upstream issue).
+- **Chunking:** single-packet vs store-and-forward for large sync blobs (defer until airtime budget known).
+- **Legal:** GPL-3.0 protobuf package + AGPL app — confirm distribution stance with counsel (already noted in MESHTASTIC-BLE.md).
+
+---
+
+**PR checklist:** Link this file in the PR description. Do not merge until section 6 is satisfied or exceptions are documented under section 8 with owner and date.
+
+## 9. Execution order (checklist)
+
+Complete in order; later phases may start stubs but must not ship user-facing sends until Phase A is done.
+
+- [ ] **P1** Envelope spec in MESHTASTIC-BLE.md + `EMBER_PORTNUM` constant + parser tests (no radio).
+- [ ] **P1** Build/send `ToRadio.packet` from session; log hex preview in Settings (dev).
+- [ ] **P1** Receive path: FromRadio `packet` → dispatch EMBER port to handler.
+- [ ] **P2** BLE state machine + permission strings + user messaging.
+- [ ] **P3** ToRadio queue + teardown `disconnect`.
+- [ ] **P4** Golden fixtures in repo + CI.
+- [ ] **P5** Crisis UI mesh strip; copy review vs MVP-GUIDE.

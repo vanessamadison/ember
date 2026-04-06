@@ -163,6 +163,7 @@ eas submit --platform android
 | [docs/MVP-DEPLOY.md](docs/MVP-DEPLOY.md) | EAS builds, TestFlight / Play internal, env notes |
 | [docs/PHASE-B-SYNC.md](docs/PHASE-B-SYNC.md) | Members + check-ins sync (sneaker-net + relay) |
 | [docs/MESHTASTIC-BLE.md](docs/MESHTASTIC-BLE.md) | Meshtastic BLE + protobuf handshake (Tier 2 bring-up) |
+| [docs/PLAN-MESH-TIER2-ROLLOUT.md](docs/PLAN-MESH-TIER2-ROLLOUT.md) | Phased plan: mesh app layer, BLE UX, robustness, CI, crisis UI |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Technical specification |
 
 ## Project Structure
