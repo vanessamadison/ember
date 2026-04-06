@@ -42,14 +42,22 @@ Parsing is **best-effort**: bad magic, version, or length returns null / throws 
 | `src/mesh/emberMeshPacket.ts` | `MeshPacket` + `ToRadio.packet` encoding |
 | `src/mesh/emberMeshInbound.ts` | Extract EMBER frames from `FromRadio`, optional listener |
 | `src/mesh/communityFingerprint.ts` | SHA-256 fingerprint for envelope |
+| `src/mesh/bleUserStrings.ts` | Bluetooth state labels and Settings guidance (P2) |
 | `src/mesh/fromRadioSummary.ts` | Short UI-safe lines from decoded messages |
 | `app/(tabs)/settings.tsx` | Mesh UI + session lifecycle |
 
 ## Native / Expo
 
 - Dependency: **`react-native-ble-plx`** (see `app.json` plugins if you extend config).
-- **Permissions**: Android location / Bluetooth permissions and iOS `NSBluetoothAlwaysUsageDescription` must be set for production; confirm against current Expo and platform docs when you ship.
+- **Permissions** (`app.json`): iOS Bluetooth usage strings and `bluetooth-central` background mode; Android `BLUETOOTH_SCAN`, `BLUETOOTH_CONNECT`, `BLUETOOTH_ADVERTISE`, and location permissions used by many stacks for legacy scan behavior. Reconcile with Expo / target SDK release notes before store submission.
 - **`postinstall`**: `scripts/patch-meshtastic-protobufs-types.mjs` copies the shipped `mod-*.d.ts` to `mod.d.ts` because the published package’s `"types"` field points at a missing file. Re-run happens on every `npm install`.
+
+## Troubleshooting (P2)
+
+- **Settings shows “Permission needed”** — Open **System settings → EMBER → Bluetooth** (iOS) or app permissions (Android), enable Bluetooth, and cold-start the app if the adapter was off.
+- **“Bluetooth Off”** — Enable system Bluetooth; the Mesh screen explains this inline and offers **Open system settings** when it may help.
+- **Empty scan** — Radio must advertise the Meshtastic service UUID; put the device in a phone-Connectable / API mode per Meshtastic docs. Wrong LoRa region or firmware sleep can also hide the advertiser.
+- **Writes failing after rapid taps** — ToRadio writes are **queued** in `MeshtasticBleBridge`; disconnect sets a short **closing** window so overlapping sends fail fast with a clear error.
 
 ## Tests
 

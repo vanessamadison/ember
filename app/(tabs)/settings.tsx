@@ -8,6 +8,7 @@ import {
   Alert,
   TextInput,
   ActivityIndicator,
+  Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as Clipboard from 'expo-clipboard';
@@ -33,6 +34,7 @@ import { bytesToHexPreview, encodeEmberMeshDataPacketToRadio } from '../../src/m
 import { digestFromRadioMessages } from '../../src/mesh/fromRadioSummary';
 import { MeshtasticSession } from '../../src/mesh/meshtasticSession';
 import type { FromRadioMessage } from '../../src/mesh/meshtasticCodec';
+import { bleMeshGuidance, bleStateLabel } from '../../src/mesh/bleUserStrings';
 
 const MESH_LOG_MAX_LINES = 14;
 
@@ -419,6 +421,11 @@ export default function SettingsScreen() {
       ? new Date(inviteExpiresAt).toLocaleString()
       : 'No cutoff (legacy community)';
 
+  const meshBleGuidance = useMemo(
+    () => bleMeshGuidance(meshBleState),
+    [meshBleState]
+  );
+
   const toggles = {
     autoConnect: true,
     relayMode: false,
@@ -725,8 +732,30 @@ export default function SettingsScreen() {
             </Text>
             <View style={styles.contentRow}>
               <Text style={styles.contentLabel}>Bluetooth</Text>
-              <Text style={styles.contentValue}>{meshBleState}</Text>
+              <Text style={[styles.contentValue, { flex: 1, textAlign: 'right' }]}>
+                {bleStateLabel(meshBleState)}
+              </Text>
             </View>
+            {!meshNativeOk ? (
+              <Text style={styles.syncHelp}>
+                Mesh Bluetooth needs a native development build with react-native-ble-plx (Expo Go and web
+                are not supported for this prototype).
+              </Text>
+            ) : meshBleState !== 'PoweredOn' ? (
+              <>
+                <Text style={styles.syncHelp}>{meshBleGuidance.hint}</Text>
+                {meshBleGuidance.suggestOpenSettings ? (
+                  <Pressable
+                    style={styles.syncButton}
+                    onPress={() => {
+                      void Linking.openSettings();
+                    }}
+                  >
+                    <Text style={styles.syncButtonText}>Open system settings</Text>
+                  </Pressable>
+                ) : null}
+              </>
+            ) : null}
             {meshHandshakeBusy ? (
               <View style={[styles.contentRow, { justifyContent: 'flex-start', gap: 8 }]}>
                 <ActivityIndicator color="#d4a574" size="small" />

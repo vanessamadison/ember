@@ -18,8 +18,8 @@
       "bundleIdentifier": "com.illapex.ember",
       "buildNumber": "1",
       "infoPlist": {
-        "NSBluetoothAlwaysUsageDescription": "EMBER uses Bluetooth to communicate with mesh network nodes for offline emergency communication.",
-        "NSBluetoothPeripheralUsageDescription": "EMBER uses Bluetooth to communicate with mesh network nodes.",
+        "NSBluetoothAlwaysUsageDescription": "EMBER uses Bluetooth to connect to Meshtastic-compatible LoRa radios for offline mesh links during emergencies.",
+        "NSBluetoothPeripheralUsageDescription": "EMBER connects over Bluetooth to your Meshtastic-class radio (Tier 2) for encrypted coordination when networks fail.",
         "NSLocalNetworkUsageDescription": "EMBER uses local networking for peer-to-peer encrypted data sync.",
         "UIBackgroundModes": [
           "bluetooth-central",

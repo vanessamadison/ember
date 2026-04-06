@@ -6,6 +6,7 @@ import {
   MESHTASTIC_RECOMMENDED_MTU,
   MESHTASTIC_TO_RADIO_UUID,
 } from './constants';
+import { encodeDisconnect } from './meshtasticCodec';
 import { frameProtobufPayload } from './streamFraming';
 
 export type BlePoweredState =
@@ -43,6 +44,16 @@ export class MeshtasticBleBridge {
   private manager: BleManager | null = null;
   private stateSub: Subscription | null = null;
   private connected: Device | null = null;
+  /** Serialize ToRadio ATT writes (P3). */
+  private writeTail: Promise<void> = Promise.resolve();
+  /** True while tearing down link so new writes fail fast. */
+  private closing = false;
+
+  private enqueueRadioWrite(task: () => Promise<void>): Promise<void> {
+    const run = this.writeTail.then(task);
+    this.writeTail = run.catch(() => {});
+    return run;
+  }
 
   isNativeBleAvailable(): boolean {
     return (
@@ -132,7 +143,7 @@ export class MeshtasticBleBridge {
       throw new Error('BLE not available.');
     }
     const mgr = this.ensureManager();
-    await this.disconnect();
+    await this.disconnect({ protocolDisconnect: true });
     const device = await mgr.connectToDevice(deviceId);
     await device.discoverAllServicesAndCharacteristics();
     try {
@@ -143,14 +154,43 @@ export class MeshtasticBleBridge {
     this.connected = device;
   }
 
-  async disconnect(): Promise<void> {
-    if (this.connected) {
+  /**
+   * Drop GATT connection. Optionally sends Meshtastic `disconnect` on ToRadio first (spec: client shutdown hint).
+   */
+  async disconnect(
+    options: { protocolDisconnect?: boolean } = {}
+  ): Promise<void> {
+    const { protocolDisconnect = true } = options;
+    const device = this.connected;
+    if (!device) {
+      return;
+    }
+    this.closing = true;
+    try {
+      if (protocolDisconnect) {
+        await this.enqueueRadioWrite(async () => {
+          const c = this.connected;
+          if (!c) return;
+          const body = encodeDisconnect();
+          const framed = frameProtobufPayload(body);
+          const b64 = fromByteArray(framed);
+          await c.writeCharacteristicWithResponseForService(
+            MESHTASTIC_MESH_SERVICE_UUID,
+            MESHTASTIC_TO_RADIO_UUID,
+            b64
+          );
+        }).catch(() => {
+          /* link may already be gone */
+        });
+      }
+    } finally {
       try {
-        await this.connected.cancelConnection();
+        await device.cancelConnection();
       } catch {
         /* ignore */
       }
       this.connected = null;
+      this.closing = false;
     }
   }
 
@@ -162,16 +202,24 @@ export class MeshtasticBleBridge {
    * Write framed protobuf bytes to ToRadio (you must supply valid ToRadio protobuf body).
    */
   async writeToRadioProtobuf(protobufBody: Uint8Array): Promise<void> {
+    if (this.closing) {
+      throw new Error('Radio connection is closing.');
+    }
     if (!this.connected) {
       throw new Error('Not connected to a radio.');
     }
-    const framed = frameProtobufPayload(protobufBody);
-    const b64 = fromByteArray(framed);
-    await this.connected.writeCharacteristicWithResponseForService(
-      MESHTASTIC_MESH_SERVICE_UUID,
-      MESHTASTIC_TO_RADIO_UUID,
-      b64
-    );
+    return this.enqueueRadioWrite(async () => {
+      if (!this.connected) {
+        throw new Error('Not connected to a radio.');
+      }
+      const framed = frameProtobufPayload(protobufBody);
+      const b64 = fromByteArray(framed);
+      await this.connected.writeCharacteristicWithResponseForService(
+        MESHTASTIC_MESH_SERVICE_UUID,
+        MESHTASTIC_TO_RADIO_UUID,
+        b64
+      );
+    });
   }
 
   /**
@@ -208,12 +256,14 @@ export class MeshtasticBleBridge {
 
   destroy(): void {
     this.stopScan();
-    void this.disconnect();
-    this.stateSub?.remove();
-    this.stateSub = null;
-    const mgr = this.manager;
-    this.manager = null;
-    if (mgr) void mgr.destroy().catch(() => {});
+    void (async () => {
+      await this.disconnect({ protocolDisconnect: true }).catch(() => {});
+      this.stateSub?.remove();
+      this.stateSub = null;
+      const mgr = this.manager;
+      this.manager = null;
+      if (mgr) void mgr.destroy().catch(() => {});
+    })();
   }
 }
 
