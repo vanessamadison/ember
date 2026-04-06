@@ -1,3 +1,4 @@
+import { tryExtractEmberMeshFromFromRadio } from './emberMeshInbound';
 import type { FromRadioMessage } from './meshtasticCodec';
 
 export interface FromRadioDigest {
@@ -41,6 +42,13 @@ export function digestFromRadioMessages(
         break;
       case 'packet': {
         const p = v.value;
+        const ember = tryExtractEmberMeshFromFromRadio(m);
+        if (ember) {
+          lines.push(
+            `EMBER mesh v1: ${ember.ciphertext.length} B ciphertext (rx from node ${p.from})`
+          );
+          break;
+        }
         const dest = p.to === 0xffffffff ? 'broadcast' : `to ${p.to}`;
         lines.push(`Packet from=${p.from} ${dest}`);
         break;

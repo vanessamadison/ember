@@ -10,6 +10,23 @@ This document describes how EMBER talks to Meshtastic radios over Bluetooth Low 
 - **Protobufs** from **`@meshtastic/protobufs`** (GPL-3.0), encoded/decoded with **`@bufbuild/protobuf`** (Apache-2.0). Schema version is **pinned** in `package.json`; verify license compatibility for your distribution.
 - **Client handshake**: `want_config` (`ToRadio`), drain `FromRadio` until empty, subscribe to **`FromNum`** notifications and drain again on each notify.
 - **Settings → Mesh Network**: scan, connect, disconnect, live digest log (e.g. `MyNode`, `ConfigComplete`, packets). **Re-request config** repeats `want_config` without reconnecting.
+- **EMBER mesh payloads (v1)** — After handshake, the app can send `ToRadio.packet` with `MeshPacket` + `Data` using **portnum 270** (private / unregistered range 256–511; see `src/mesh/emberMeshConstants.ts`). Payload bytes use the **EMBER envelope v1** below. Dev builds expose a test send in Settings.
+
+## EMBER application envelope v1
+
+Binary blob inside `Data.payload` when `portnum === 270`:
+
+| Offset | Size | Content                                                        |
+|--------|------|----------------------------------------------------------------|
+| 0      | 4    | Magic **EMB1** (`45 4d 42 31`)                                 |
+| 4      | 1    | Envelope version **1**                                         |
+| 5      | 1    | Flags (0 for now)                                              |
+| 6      | 2    | Reserved (0)                                                   |
+| 8      | 16   | **Community fingerprint** (first 16 bytes of SHA-256 of `ember-mesh-v1:${communityId}`) — public, not secret |
+| 24     | 2    | Ciphertext length, **big-endian**                              |
+| 26     | N    | Ciphertext (max **200** bytes in v1; content is app-layer encrypted) |
+
+Parsing is **best-effort**: bad magic, version, or length returns null / throws from builders only when limits are violated.
 
 ## Source layout
 
@@ -19,7 +36,12 @@ This document describes how EMBER talks to Meshtastic radios over Bluetooth Low 
 | `src/mesh/streamFraming.ts` | Meshtastic stream framing helpers |
 | `src/mesh/meshtasticBleBridge.ts` | BLE manager, scan, connect, read/write, `monitorFromNum` |
 | `src/mesh/meshtasticCodec.ts` | Encode `ToRadio`, decode framed `FromRadio`, size guards |
-| `src/mesh/meshtasticSession.ts` | `requestConfigAndDrainOnce`, `drainFromRadioMailbox` |
+| `src/mesh/meshtasticSession.ts` | Handshake, drain, **`sendEmberMeshCiphertext`** |
+| `src/mesh/emberMeshConstants.ts` | **Portnum 270**, envelope sizes |
+| `src/mesh/emberMeshEnvelope.ts` | Build / parse envelope v1 |
+| `src/mesh/emberMeshPacket.ts` | `MeshPacket` + `ToRadio.packet` encoding |
+| `src/mesh/emberMeshInbound.ts` | Extract EMBER frames from `FromRadio`, optional listener |
+| `src/mesh/communityFingerprint.ts` | SHA-256 fingerprint for envelope |
 | `src/mesh/fromRadioSummary.ts` | Short UI-safe lines from decoded messages |
 | `app/(tabs)/settings.tsx` | Mesh UI + session lifecycle |
 
@@ -33,7 +55,7 @@ This document describes how EMBER talks to Meshtastic radios over Bluetooth Low 
 
 - Jest mocks `react-native-ble-plx` under `__mocks__/`.
 - `jest.config.js` **extends** jest-expo’s `transformIgnorePatterns` so **`@meshtastic/protobufs`** and **`@bufbuild/protobuf`** (ESM) are transpiled.
-- Unit tests cover framing, codec round-trips, and `digestFromRadioMessages`.
+- Unit tests cover framing, codec round-trips, envelope v1, `encodeEmberMeshDataPacketToRadio`, and `digestFromRadioMessages`.
 
 ## Security and trust
 
@@ -42,7 +64,7 @@ This document describes how EMBER talks to Meshtastic radios over Bluetooth Low 
 
 ## What is next (suggested)
 
-1. **Application payloads** — Define an EMBER portnum or encapsulation for ciphertext blobs (members/check-ins summaries already use app-layer encryption elsewhere).
+1. **Merge pipeline** — Wire `setEmberMeshInboundListener` to decrypt + merge with Phase B rules (v1 envelope and ciphertext format are ready).
 2. **Reliability** — Queued ToRadio writes, backoff on busy radio, explicit `disconnect` ToRadio on teardown.
-3. **CI devices** — Optional hardware-in-the-loop or recorded byte fixtures for regression tests.
+3. **CI devices** — Commit golden **ToRadio** byte fixtures from a serial capture; extend Jest beyond pure unit tests.
 4. **Permissions UX** — Onboarding copy and Settings deep link when BLE is off or unauthorized.

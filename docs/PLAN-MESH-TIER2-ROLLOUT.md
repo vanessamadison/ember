@@ -135,9 +135,9 @@ flowchart LR
 
 Complete in order; later phases may start stubs but must not ship user-facing sends until Phase A is done.
 
-- [ ] **P1** Envelope spec in MESHTASTIC-BLE.md + `EMBER_PORTNUM` constant + parser tests (no radio).
-- [ ] **P1** Build/send `ToRadio.packet` from session; log hex preview in Settings (dev).
-- [ ] **P1** Receive path: FromRadio `packet` → dispatch EMBER port to handler.
+- [x] **P1** Envelope spec in MESHTASTIC-BLE.md + portnum constant + parser tests (no radio).
+- [x] **P1** Build/send `ToRadio.packet` from session; hex preview + `__DEV__` send in Settings.
+- [x] **P1** Receive path: FromRadio `packet` → `dispatchEmberMeshFromFromRadio` + digest + optional listener (merge TBD).
 - [ ] **P2** BLE state machine + permission strings + user messaging.
 - [ ] **P3** ToRadio queue + teardown `disconnect`.
 - [ ] **P4** Golden fixtures in repo + CI.

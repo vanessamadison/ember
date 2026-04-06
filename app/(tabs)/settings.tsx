@@ -27,6 +27,9 @@ import {
   type BlePoweredState,
   type DiscoveredRadio,
 } from '../../src/mesh/meshtasticBleBridge';
+import { communityMeshFingerprint16 } from '../../src/mesh/communityFingerprint';
+import { dispatchEmberMeshFromFromRadio, setEmberMeshInboundListener } from '../../src/mesh/emberMeshInbound';
+import { bytesToHexPreview, encodeEmberMeshDataPacketToRadio } from '../../src/mesh/emberMeshPacket';
 import { digestFromRadioMessages } from '../../src/mesh/fromRadioSummary';
 import { MeshtasticSession } from '../../src/mesh/meshtasticSession';
 import type { FromRadioMessage } from '../../src/mesh/meshtasticCodec';
@@ -303,6 +306,8 @@ export default function SettingsScreen() {
   const [meshHandshakeBusy, setMeshHandshakeBusy] = useState(false);
   const [meshProtoLog, setMeshProtoLog] = useState('');
   const [meshNodeNum, setMeshNodeNum] = useState<number | null>(null);
+  const [meshLastTxHex, setMeshLastTxHex] = useState<string | null>(null);
+  const [meshInboundNote, setMeshInboundNote] = useState<string | null>(null);
 
   const stopMeshRadioSubscription = () => {
     meshFromNumStopRef.current?.();
@@ -313,6 +318,9 @@ export default function SettingsScreen() {
     messages: FromRadioMessage[],
     expectedConfigId?: number
   ) => {
+    for (const m of messages) {
+      dispatchEmberMeshFromFromRadio(m);
+    }
     const { lines, nodeNum } = digestFromRadioMessages(
       messages,
       expectedConfigId
@@ -382,6 +390,15 @@ export default function SettingsScreen() {
       meshBridgeRef.current = null;
       meshSessionRef.current = null;
     };
+  }, []);
+
+  useEffect(() => {
+    setEmberMeshInboundListener((inbound) => {
+      setMeshInboundNote(
+        `Inbound EMBER v1 envelope: ${inbound.ciphertext.length} B ciphertext`
+      );
+    });
+    return () => setEmberMeshInboundListener(null);
   }, []);
 
   const profileInitial = (
@@ -739,6 +756,16 @@ export default function SettingsScreen() {
             {meshError ? (
               <Text style={[styles.syncHelp, { color: '#f59e0b' }]}>{meshError}</Text>
             ) : null}
+            {meshLastTxHex ? (
+              <Text style={styles.meshProtoLog}>
+                Last ToRadio packet (hex preview): {meshLastTxHex}
+              </Text>
+            ) : null}
+            {meshInboundNote ? (
+              <Text style={[styles.meshProtoLog, { color: '#93c5fd' }]}>
+                {meshInboundNote}
+              </Text>
+            ) : null}
             <Pressable
               style={[
                 styles.syncButton,
@@ -807,6 +834,8 @@ export default function SettingsScreen() {
                     setMeshConnectedId(null);
                     setMeshNodeNum(null);
                     setMeshProtoLog('');
+                    setMeshLastTxHex(null);
+                    setMeshInboundNote(null);
                   } catch (e) {
                     Alert.alert(
                       'Disconnect failed',
@@ -855,6 +884,54 @@ export default function SettingsScreen() {
                 Re-request config (want_config)
               </Text>
             </Pressable>
+            {__DEV__ ? (
+              <Pressable
+                style={[
+                  styles.syncButton,
+                  {
+                    opacity:
+                      !meshConnectedId ||
+                      meshHandshakeBusy ||
+                      !meshNativeOk ||
+                      !currentCommunityId ||
+                      currentCommunityId === '__none__'
+                        ? 0.45
+                        : 1,
+                  },
+                ]}
+                disabled={
+                  !meshConnectedId ||
+                  meshHandshakeBusy ||
+                  !meshNativeOk ||
+                  !currentCommunityId ||
+                  currentCommunityId === '__none__'
+                }
+                onPress={() => {
+                  void (async () => {
+                    const session = meshSessionRef.current;
+                    const cid = currentCommunityId;
+                    if (!session || !cid || cid === '__none__') return;
+                    setMeshError(null);
+                    try {
+                      const fp = await communityMeshFingerprint16(cid);
+                      const cipher = new Uint8Array([0xde, 0x76, 0x01]);
+                      const body = encodeEmberMeshDataPacketToRadio(fp, cipher);
+                      setMeshLastTxHex(bytesToHexPreview(body));
+                      await session.sendEmberMeshCiphertext(fp, cipher);
+                    } catch (e) {
+                      Alert.alert(
+                        'Dev mesh send failed',
+                        e instanceof Error ? e.message : String(e)
+                      );
+                    }
+                  })();
+                }}
+              >
+                <Text style={styles.syncButtonText}>
+                  [Dev] Send test EMBER mesh payload
+                </Text>
+              </Pressable>
+            ) : null}
             {meshDevices.map((d) => (
               <Pressable
                 key={d.id}
@@ -867,6 +944,8 @@ export default function SettingsScreen() {
                       setMeshError(null);
                       setMeshProtoLog('');
                       setMeshNodeNum(null);
+                      setMeshLastTxHex(null);
+                      setMeshInboundNote(null);
                       await b.connect(d.id);
                       setMeshConnectedId(b.getConnectedDeviceId());
                       b.stopScan();

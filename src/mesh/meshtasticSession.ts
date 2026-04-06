@@ -3,6 +3,7 @@
  * Implements config request + FromRadio draining; does not interpret mesh traffic for EMBER auth.
  */
 import type { MeshtasticBleBridge } from './meshtasticBleBridge';
+import { encodeEmberMeshDataPacketToRadio } from './emberMeshPacket';
 import {
   encodeWantConfigId,
   MESHTASTIC_MAX_STREAM_BUFFER,
@@ -63,5 +64,17 @@ export class MeshtasticSession {
   /** Clear partially assembled stream (e.g. after disconnect). */
   resetStream(): void {
     this.incoming = new Uint8Array(0);
+  }
+
+  /**
+   * Send one mesh-bound EMBER ciphertext inside Meshtastic Data + MeshPacket (broadcast).
+   * Caller must complete config handshake first.
+   */
+  async sendEmberMeshCiphertext(
+    fingerprint16: Uint8Array,
+    ciphertext: Uint8Array
+  ): Promise<void> {
+    const body = encodeEmberMeshDataPacketToRadio(fingerprint16, ciphertext);
+    await this.bridge.writeToRadioProtobuf(body);
   }
 }
