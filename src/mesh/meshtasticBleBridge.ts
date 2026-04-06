@@ -40,6 +40,9 @@ try {
  * Minimal Meshtastic BLE client: scan, connect, MTU, write framed ToRadio bytes.
  * Parsing protobufs (FromRadio / ToRadio) is a separate step (Meshtastic-protobufs).
  */
+const ATT_WRITE_MAX_ATTEMPTS = 3;
+const ATT_WRITE_RETRY_BASE_MS = 100;
+
 export class MeshtasticBleBridge {
   private manager: BleManager | null = null;
   private stateSub: Subscription | null = null;
@@ -214,11 +217,29 @@ export class MeshtasticBleBridge {
       }
       const framed = frameProtobufPayload(protobufBody);
       const b64 = fromByteArray(framed);
-      await this.connected.writeCharacteristicWithResponseForService(
-        MESHTASTIC_MESH_SERVICE_UUID,
-        MESHTASTIC_TO_RADIO_UUID,
-        b64
-      );
+      let lastErr: unknown;
+      for (let attempt = 0; attempt < ATT_WRITE_MAX_ATTEMPTS; attempt++) {
+        const dev = this.connected;
+        if (!dev) {
+          throw new Error('Not connected to a radio.');
+        }
+        try {
+          await dev.writeCharacteristicWithResponseForService(
+            MESHTASTIC_MESH_SERVICE_UUID,
+            MESHTASTIC_TO_RADIO_UUID,
+            b64
+          );
+          return;
+        } catch (e) {
+          lastErr = e;
+          if (attempt < ATT_WRITE_MAX_ATTEMPTS - 1) {
+            await new Promise((r) =>
+              setTimeout(r, ATT_WRITE_RETRY_BASE_MS * (attempt + 1))
+            );
+          }
+        }
+      }
+      throw lastErr instanceof Error ? lastErr : new Error(String(lastErr));
     });
   }
 

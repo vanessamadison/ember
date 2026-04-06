@@ -16,22 +16,25 @@ import {
   ensureMemberPublicIdsForCommunity,
   ensureResourcePublicIdsForCommunity,
 } from './ensureIds';
+import { EMBER_MESH_MAX_CIPHERTEXT } from '../mesh/emberMeshConstants';
 
 const MAX_CHECK_INS_PER_BUNDLE = 500;
 
-/** Plaintext JSON payload -> encrypted base64 (NaCl secretbox via CryptoManager). */
-export async function buildEncryptedMembersCheckInsBundle(
-  communityId: string
-): Promise<string> {
-  const mgr = getCryptoSession();
-  if (!mgr?.isInitialized()) {
-    throw new Error('Unlock encryption before syncing (open the community on this device).');
+function assertPayloadIds(payload: MembersCheckInsPayloadV1): void {
+  const badMember = payload.members.find((m) => !m.publicId);
+  if (badMember) {
+    throw new Error('Member missing public_id after ensure; database may be corrupted.');
   }
+  const badRes = payload.resources?.find((r) => !r.publicId);
+  if (badRes) {
+    throw new Error('Resource missing public_id after ensure; database may be corrupted.');
+  }
+}
 
-  await ensureMemberPublicIdsForCommunity(communityId);
-  await ensureCheckInSyncIdsForCommunity(communityId);
-  await ensureResourcePublicIdsForCommunity(communityId);
-
+async function buildMembersCheckInsPayloadV1(
+  communityId: string,
+  options: { checkInsLimit: number; includeResources: boolean }
+): Promise<MembersCheckInsPayloadV1> {
   const community = await database
     .get<Community>('communities')
     .find(communityId)
@@ -56,7 +59,7 @@ export async function buildEncryptedMembersCheckInsBundle(
     .fetch();
   const checkIns = [...checkRows]
     .sort((a, b) => b.timestamp - a.timestamp)
-    .slice(0, MAX_CHECK_INS_PER_BUNDLE);
+    .slice(0, options.checkInsLimit);
 
   const inviteCode = normalizeInviteCode(community.inviteCode);
 
@@ -90,37 +93,105 @@ export async function buildEncryptedMembersCheckInsBundle(
         };
       })
       .filter((c) => c.syncId && c.memberPublicId),
-    resources: resourceRows.map((res) => {
-      const updater = members.find((m) => m.id === res.updatedBy);
-      return {
-        publicId: res.publicId?.trim() || '',
-        category: res.category,
-        name: res.name,
-        quantity: res.quantity,
-        unit: res.unit,
-        criticalThreshold: res.criticalThreshold,
-        maxCapacity: res.maxCapacity,
-        icon: res.icon,
-        lastUpdated: res.lastUpdated,
-        updatedByMemberPublicId: updater?.publicId?.trim() || '',
-      };
-    }),
+    ...(options.includeResources
+      ? {
+          resources: resourceRows.map((res) => {
+            const updater = members.find((m) => m.id === res.updatedBy);
+            return {
+              publicId: res.publicId?.trim() || '',
+              category: res.category,
+              name: res.name,
+              quantity: res.quantity,
+              unit: res.unit,
+              criticalThreshold: res.criticalThreshold,
+              maxCapacity: res.maxCapacity,
+              icon: res.icon,
+              lastUpdated: res.lastUpdated,
+              updatedByMemberPublicId: updater?.publicId?.trim() || '',
+            };
+          }),
+        }
+      : {}),
     ...(typeof community.inviteExpiresAt === 'number' &&
     community.inviteExpiresAt > 0
       ? { communityInviteExpiresAt: community.inviteExpiresAt }
       : {}),
   };
 
-  const badMember = payload.members.find((m) => !m.publicId);
-  if (badMember) {
-    throw new Error('Member missing public_id after ensure; database may be corrupted.');
-  }
-  const badRes = payload.resources?.find((r) => !r.publicId);
-  if (badRes) {
-    throw new Error('Resource missing public_id after ensure; database may be corrupted.');
+  return payload;
+}
+
+/** Plaintext JSON payload -> encrypted base64 (NaCl secretbox via CryptoManager). */
+export async function buildEncryptedMembersCheckInsBundle(
+  communityId: string
+): Promise<string> {
+  const mgr = getCryptoSession();
+  if (!mgr?.isInitialized()) {
+    throw new Error('Unlock encryption before syncing (open the community on this device).');
   }
 
+  await ensureMemberPublicIdsForCommunity(communityId);
+  await ensureCheckInSyncIdsForCommunity(communityId);
+  await ensureResourcePublicIdsForCommunity(communityId);
+
+  const payload = await buildMembersCheckInsPayloadV1(communityId, {
+    checkInsLimit: MAX_CHECK_INS_PER_BUNDLE,
+    includeResources: true,
+  });
+  assertPayloadIds(payload);
+
   return mgr.encryptString(JSON.stringify(payload));
+}
+
+/**
+ * Same encryption as relay/sneaker bundles, trimmed until UTF-8 ciphertext fits
+ * {@link EMBER_MESH_MAX_CIPHERTEXT} (one Meshtastic frame). Drops resources first, then check-ins one-by-one.
+ */
+export async function buildEncryptedMembersCheckInsBundleForMesh(
+  communityId: string
+): Promise<string> {
+  const mgr = getCryptoSession();
+  if (!mgr?.isInitialized()) {
+    throw new Error('Unlock encryption before syncing (open the community on this device).');
+  }
+
+  await ensureMemberPublicIdsForCommunity(communityId);
+  await ensureCheckInSyncIdsForCommunity(communityId);
+  await ensureResourcePublicIdsForCommunity(communityId);
+
+  const checkRows = await database
+    .get<CheckIn>('check_ins')
+    .query(Q.where('community_id', communityId))
+    .fetch();
+  const maxChecks = Math.min(checkRows.length, MAX_CHECK_INS_PER_BUNDLE);
+
+  let useResources = true;
+  let n = maxChecks;
+
+  for (let attempt = 0; attempt < 800; attempt++) {
+    const payload = await buildMembersCheckInsPayloadV1(communityId, {
+      checkInsLimit: n,
+      includeResources: useResources,
+    });
+    assertPayloadIds(payload);
+    const b64 = mgr.encryptString(JSON.stringify(payload));
+    if (new TextEncoder().encode(b64).length <= EMBER_MESH_MAX_CIPHERTEXT) {
+      return b64;
+    }
+    if (useResources) {
+      useResources = false;
+      continue;
+    }
+    if (n > 0) {
+      n -= 1;
+      continue;
+    }
+    break;
+  }
+
+  throw new Error(
+    'Encrypted snapshot cannot fit one mesh frame. Trim check-ins, use relay/sneaker-net sync, or shorten member text fields.'
+  );
 }
 
 export function decryptMembersCheckInsBundleJson(

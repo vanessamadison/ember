@@ -8,9 +8,9 @@ For hands-on build and test steps, see [MVP-DEPLOY.md](./MVP-DEPLOY.md). For cro
 
 ## 1. One-page truth for funders and partners
 
-**What EMBER is today (this repository):** a **Tier 1–focused, offline-first mobile app** with local encrypted storage, community onboarding, coordination UI (resources, drills, plans, etc.), and an **early cross-device path** for **members and check-ins** via encrypted bundles (sneaker-net or a minimal HTTP relay). It is a credible **software MVP** for peacetime coordination and security-minded pilots; it is **not** yet the full three-tier “community resilience stack” with production Meshtastic integration, hardware SKUs, and field-proven crisis workflows.
+**What EMBER is today (this repository):** a **Tier 1–focused, offline-first mobile app** with local encrypted storage, community onboarding, coordination UI (resources, drills, plans, etc.), and an **early cross-device path** for **members and check-ins** via encrypted bundles (sneaker-net or a minimal HTTP relay). **Meshtastic over BLE** is implemented as a **working prototype** (pairing, Phase B snapshot over LoRa with v1/v2 framing, merge on receive — see [MESHTASTIC-BLE.md](./MESHTASTIC-BLE.md)); it is **not** store-grade mesh UX or field-certified reliability yet. **Tier 2/3 hardware SKUs** and fully proven crisis field workflows remain outside this repo.
 
-**What “deployment” means at this stage:** internal or small-group distribution (TestFlight, Play internal track, EAS builds), plus **explicit pilot consent** and clear limitations (sync scope, no storefront claim of full mesh until integrated).
+**What “deployment” means at this stage:** internal or small-group distribution (TestFlight, Play internal track, EAS builds), plus **explicit pilot consent** and clear limitations (Phase B sync scope, Meshtastic path is **prototype** until field validation and UX hardening — see [MESHTASTIC-BLE.md](./MESHTASTIC-BLE.md)).
 
 **What “funding for further implementation” usually requires beyond a demo app:** a **threat model and mitigation matrix**, evidence of **user or community pilots**, a **hardware and firmware roadmap** for tiers 2–3 (even if V1 is reseller + Meshtastic), and a plan for **metadata minimization, identity/abuse controls, and operational playbooks**—aligned with the layered hardening you outlined (crypto, system, radio, physical, operational, community).
 
@@ -27,12 +27,12 @@ The strongest version of EMBER is a **stack** where each tier compensates when o
 | Offline-first coordination | Core value | SQLite/Loki via WatermelonDB; core flows local | Harden **cold start**, corruption recovery, large DB perf, deterministic offline queues beyond current sync vertical |
 | Encryption | NaCl secretbox, KDF, SecureStore | Implemented for app crypto path; community keys from passphrase | Move KDF story toward **audited parameters**, clarify distinction vs server “zero knowledge”; **no production pen test** yet documented |
 | Peacetime features | Resources, drills, plans, check-ins, gamification | UI + much data modeled; vertical share **members + check-ins** sync only (Phase B) | Extend sync/conflict model to **messages, plans, resources**; **CRDT/merge testing** under ugly cases |
-| Transport model | Optional cloud, BLE, Meshtastic via BLE in crisis | **Phase B:** sneaker-net + optional **dev relay**; README claims mesh readiness | **BLE bridge to Meshtastic** not productized here; needs spec → implementation → field test |
+| Transport model | Optional cloud, BLE, Meshtastic via BLE in crisis | **Phase B:** sneaker-net + optional **dev relay**; **Meshtastic BLE client** + portnum 270 Phase B blobs ([MESHTASTIC-BLE.md](./MESHTASTIC-BLE.md), [MESH-FIELD-TEST.md](./MESH-FIELD-TEST.md)) | **Production** hardening: permissions/onboarding polish, RF reliability, adaptive airtime, formal pilot evidence |
 | Identity & invites | Strong invites, roles, abuse resistance | Invite + passphrase gate; coordinator role on create | **Invite expiry**, **revocation**, **role/permission model**, **moderation**, signed announcements |
 | Metadata & OPSEC | Minimize traces | Relay sees invite + auth derivative; UI/logging not fully audited | Metadata minimization pass; **production logging policy**; notification privacy |
 | Reliability | Works when network gone | Strong for single-device; multi-device improving | **Pull-merge-push** discipline; rate limits; backup education UX |
 
-**Bottom line — Tier 1:** You can **pilot the app** and demonstrate **local-first encrypted coordination** plus **partial multi-device sync** for people/check-ins. You **cannot** yet credibly claim end-to-end “crisis mesh on phone + LoRa” **in this codebase** without shipping the BLE/Meshtastic path and proving it in the field.
+**Bottom line — Tier 1:** You can **pilot the app** and demonstrate **local-first encrypted coordination** plus **partial multi-device sync** for people/check-ins (sneaker-net, relay, **and** Meshtastic snapshot path in dev/native builds). Credibility for **fundraising or public “crisis-grade mesh” claims** still depends on **field validation**, **BLE UX hardening**, and **operational runbooks** — not only on prototype code.
 
 ### Tier 2: EMBER Node Kits (fixed infrastructure)
 

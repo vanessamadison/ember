@@ -1,17 +1,31 @@
 import type { FromRadioMessage } from './meshtasticCodec';
 import { EMBER_MESH_PORTNUM } from './emberMeshConstants';
+import { feedEmberMeshV2Chunk } from './emberMeshChunkReassembly';
 import {
-  tryParseEmberMeshEnvelopeV1,
+  tryParseEmberMeshWirePayload,
   type EmberMeshEnvelopeV1,
 } from './emberMeshEnvelope';
 
 export type EmberMeshInboundListener = (msg: EmberMeshEnvelopeV1) => void;
 
-let listener: EmberMeshInboundListener | null = null;
+const listeners = new Set<EmberMeshInboundListener>();
 
-/** Optional hook for ciphertext merge/decrypt pipeline (Phase A). */
-export function setEmberMeshInboundListener(cb: EmberMeshInboundListener | null): void {
-  listener = cb;
+/** Register for EMBER v1 mesh envelopes after {@link dispatchEmberMeshFromFromRadio}. */
+export function subscribeEmberMeshInbound(
+  cb: EmberMeshInboundListener
+): () => void {
+  listeners.add(cb);
+  return () => listeners.delete(cb);
+}
+
+/**
+ * @deprecated Use {@link subscribeEmberMeshInbound}. Replaces all subscribers (legacy single-slot).
+ */
+export function setEmberMeshInboundListener(
+  cb: EmberMeshInboundListener | null
+): void {
+  listeners.clear();
+  if (cb) listeners.add(cb);
 }
 
 export function tryExtractEmberMeshFromFromRadio(
@@ -22,13 +36,28 @@ export function tryExtractEmberMeshFromFromRadio(
   if (p.payloadVariant.case !== 'decoded') return null;
   const d = p.payloadVariant.value;
   if (d.portnum !== EMBER_MESH_PORTNUM) return null;
-  return tryParseEmberMeshEnvelopeV1(d.payload);
+  const wire = tryParseEmberMeshWirePayload(d.payload);
+  if (!wire) return null;
+  if (wire.kind === 'v1') return wire.envelope;
+  return feedEmberMeshV2Chunk(
+    wire.fingerprint,
+    wire.transferId,
+    wire.chunkIndex,
+    wire.totalChunks,
+    wire.chunk
+  );
 }
 
-/** Notify listener when a FromRadio message carries a valid EMBER v1 envelope. */
+/** Notify subscribers when a FromRadio message carries a valid EMBER v1 envelope. */
 export function dispatchEmberMeshFromFromRadio(m: FromRadioMessage): boolean {
   const parsed = tryExtractEmberMeshFromFromRadio(m);
   if (!parsed) return false;
-  listener?.(parsed);
+  for (const l of listeners) {
+    try {
+      l(parsed);
+    } catch {
+      /* subscriber must not break dispatch */
+    }
+  }
   return true;
 }

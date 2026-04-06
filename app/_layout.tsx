@@ -9,6 +9,8 @@ import { CryptoBootstrap } from '../src/context/CryptoBootstrap';
 import {
   RootCommunityProvider,
 } from '../src/context/CommunityContext';
+import { MeshRadioProvider } from '../src/context/MeshRadioContext';
+import { MeshSyncInboundBridge } from '../src/sync/MeshSyncInboundBridge';
 import { initializeDatabase } from '../src/hooks/useDatabase';
 
 initializeDatabase(database);
@@ -20,6 +22,8 @@ export default function RootLayout() {
         <AppHydrationGate>
           <CryptoBootstrap />
           <RootCommunityProvider>
+            <MeshRadioProvider>
+            <MeshSyncInboundBridge />
             <View style={{ flex: 1, backgroundColor: '#0f0f0f' }}>
               <StatusBar style="light" backgroundColor="#0f0f0f" />
               <Stack
@@ -33,6 +37,7 @@ export default function RootLayout() {
                 <Stack.Screen name="(tabs)" />
               </Stack>
             </View>
+            </MeshRadioProvider>
           </RootCommunityProvider>
         </AppHydrationGate>
       </AppProvider>

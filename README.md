@@ -40,19 +40,19 @@ Peacetime mode is where communities prepare. Track supplies, run drills, manage 
 
 ### Crisis Mode
 
-When disaster strikes, EMBER shifts to a red-alert interface optimized for urgency. Mesh networking activates for zero-internet communication via LoRa radio.
+When disaster strikes, EMBER shifts to a red-alert interface optimized for urgency. Long-range sync uses a **Meshtastic radio over BLE** (pairing, diagnostics, and encrypted snapshot broadcast on **Status** and **Config → Mesh Network**); the **People** tab stays the member roster so mesh tooling is not conflated with the directory.
 
 <p align="center">
 <img src="assets/mockups/crisis-status.png" width="220" alt="Crisis Status" />
 <img src="assets/mockups/crisis-supply.png" width="220" alt="Crisis Supply" />
 </p>
 <p align="center">
-<img src="assets/mockups/crisis-mesh.png" width="220" alt="Mesh Network" />
+<img src="assets/mockups/crisis-mesh.png" width="220" alt="Crisis People roster (mockup filename legacy)" />
 <img src="assets/mockups/crisis-plans.png" width="220" alt="Crisis Plans" />
 </p>
 
 <p align="center">
-<sub><strong>Left to right:</strong> Crisis dashboard with safety check-ins · Supply levels with critical alerts · Live mesh network with encrypted broadcast messaging · Emergency plans accessible offline</sub>
+<sub><strong>Left to right:</strong> Crisis dashboard (Status) with mesh summary + broadcast when connected · Supply · People roster (same label as peacetime; not the Mesh settings screen) · Emergency plans offline</sub>
 </p>
 
 ---
@@ -95,7 +95,7 @@ EMBER is a three-tier system. Each tier is independent:
 - **Preparedness gamification** — Drills with XP, achievements, readiness scores, daily check-in streaks
 - **Emergency plans** — Encrypted offline storage with printable analog kit
 - **Crisis mode** — Simplified UI, mesh-first communication, power-optimized operation
-- **Mesh network (prototype)** — BLE + official Meshtastic protobufs: `want_config`, FromRadio drain, FromNum notifications (Settings → Mesh Network). See [docs/MESHTASTIC-BLE.md](docs/MESHTASTIC-BLE.md).
+- **Mesh network (prototype)** — BLE + Meshtastic protobufs (`want_config`, FromRadio, FromNum); **`MeshRadioProvider`**; portnum **270** envelope v1/v2 + Phase B decrypt/merge; **Config → Mesh Network** for pairing and **Broadcast encrypted snapshot**; **Status** (crisis) / **Home** (peacetime) for summary + crisis broadcast; **People** tab is roster-only (crisis copy points users to mesh controls). [docs/MESHTASTIC-BLE.md](docs/MESHTASTIC-BLE.md) · [docs/MESH-FIELD-TEST.md](docs/MESH-FIELD-TEST.md) · [docs/PLAN-MESH-TIER2-ROLLOUT.md](docs/PLAN-MESH-TIER2-ROLLOUT.md).
 - **CRDT sync** — Conflict-free replicated data types for offline conflict resolution
 
 ## Tech Stack
@@ -164,6 +164,7 @@ eas submit --platform android
 | [docs/PHASE-B-SYNC.md](docs/PHASE-B-SYNC.md) | Members + check-ins sync (sneaker-net + relay) |
 | [docs/MESHTASTIC-BLE.md](docs/MESHTASTIC-BLE.md) | Meshtastic BLE + protobuf handshake (Tier 2 bring-up) |
 | [docs/PLAN-MESH-TIER2-ROLLOUT.md](docs/PLAN-MESH-TIER2-ROLLOUT.md) | Phased plan: mesh app layer, BLE UX, robustness, CI, crisis UI |
+| [docs/MESH-FIELD-TEST.md](docs/MESH-FIELD-TEST.md) | Two-device mesh + LoRa field test runbook |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Technical specification |
 
 ## Project Structure

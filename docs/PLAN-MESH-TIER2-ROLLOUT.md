@@ -4,14 +4,15 @@
 |--------|--------|
 | Author | EMBER maintainers |
 | Date | 2026-04-06 |
+| Updated | 2026-04-04 (crisis **People** tab + roster banner + broadcast success alert) |
 | Branch / PR | (set when work starts) |
-| Status | Draft |
+| Status | Active (P4–P5 landed; see section 9) |
 
 Related: [MESHTASTIC-BLE.md](./MESHTASTIC-BLE.md) (current prototype), [ARCHITECTURE.md](./ARCHITECTURE.md) §10.
 
 ## 1. Problem
 
-The app can pair with a Meshtastic radio and complete a **config handshake**, but mesh is not yet a **safe, user-visible EMBER channel** for community data. We need a phased path from “bytes on BLE” to **encrypted EMBER payloads over LoRa**, **production-ready BLE UX**, **reliable transports**, **testability**, and **crisis-mode alignment**—without blurring trust boundaries between Meshtastic link crypto and EMBER community crypto.
+The app can pair with a Meshtastic radio, complete the **config handshake**, and exchange **Phase B** ciphertext over **portnum 270** (merge on peers). Remaining work is to make that path **production-safe and field-reliable**: **encrypted payloads over LoRa** are real, but **BLE/mesh UX**, **airtime robustness**, **permissions/onboarding**, **testability**, and **crisis copy** must keep tightening—without blurring trust boundaries between Meshtastic link crypto and EMBER community crypto.
 
 ## 2. Scope
 
@@ -55,13 +56,13 @@ The app can pair with a Meshtastic radio and complete a **config handshake**, bu
 - Single-writer queue for ToRadio from JS; await completion before next write.
 - On disconnect: `encodeDisconnect()` + cancel FromNum + `resetStream()`.
 
-**Phase D — CI / fixtures (priority 4)**
+**Phase D — CI / fixtures (priority 4)** — *Implemented*
 
-- Commit small **golden files** (hex or base64) for: framed `want_config`, one `FromRadio` myInfo, one encapsulated EMBER envelope parser test (no live radio in CI).
+- Committed **`__tests__/mesh/fixtures/wireGolden.ts`**: framed `ToRadio` bytes (e.g. `want_config`, Meshtastic `disconnect`). **`wireGolden.test.ts`** checks encoders and single-packet **`unframeMeshtasticStream`** parse. Regenerate via **`scripts/print-mesh-wire-golden.mjs`** when protobuf/framing changes. *Optional later:* `FromRadio` goldens (still no live radio in CI).
 
-**Phase E — Product alignment (priority 5)**
+**Phase E — Product alignment (priority 5)** — *Implemented (initial)*
 
-- Crisis tab or mesh subsection: connection state, last send/recv time, **no fake** “mesh wide” guarantees—copy reviewed against MVP-GUIDE.
+- **Home** tab mesh block: Bluetooth + LoRa bridge state from **`useMeshRadioStore`**, with copy that separates **community roster** (synced data) from **radio link** (not cellular/internet). Crisis mode uses accent color on the radio line; Settings remains the detailed control surface. *Later:* last send/recv time, crisis-only entry, MVP-GUIDE pass.
 
 ```mermaid
 flowchart LR
@@ -113,8 +114,9 @@ flowchart LR
 | 3–4 – BLE states | manual | iOS + Android dev clients |
 | 5 – Write queue | integration / manual | Settings stress or detox (optional) |
 | 6 – Teardown | manual | disconnect/reconnect 10x |
-| 7 – Fixtures | CI unit | `__tests__/mesh/fixtures/` |
-| 8 – Crisis copy | manual QA | crisis screen review |
+| 7 – Fixtures | CI unit | `wireGolden.ts` (+ **v2 single-chunk** ToRadio), `wireGolden.test.ts`; regen `node scripts/print-mesh-wire-golden.mjs` |
+| 8 – Crisis copy | manual QA | Home mesh strip + Settings; review vs MVP-GUIDE when that doc is finalized |
+| Field | Two-device | [MESH-FIELD-TEST.md](./MESH-FIELD-TEST.md) runbook |
 
 ## 7. Rollout and rollback
 
@@ -139,6 +141,9 @@ Complete in order; later phases may start stubs but must not ship user-facing se
 - [x] **P1** Build/send `ToRadio.packet` from session; hex preview + `__DEV__` send in Settings.
 - [x] **P1** Receive path: FromRadio `packet` → `dispatchEmberMeshFromFromRadio` + digest + optional listener (merge TBD).
 - [x] **P2** BLE state guidance (`bleUserStrings`), Settings hints + **Open system settings**, refined iOS usage strings, troubleshooting doc.
+- [x] **Gate 0 (field BLE)** Android `requestBleScanRuntimePermissions` before Mesh scan; **Refresh Bluetooth state** in Settings; `Unknown` / platform-specific copy; Home link to system settings when unauthorized/off; onboarding Tier 2 card; doc troubleshooting for runtime perms.
+- [x] **Mesh → Phase B merge** `subscribeEmberMeshInbound` (multi-listener); `mergeFromEmberMeshEnvelopeForCommunity` (fingerprint + decrypt + `mergeMembersCheckInsPayload`); `MeshSyncInboundBridge` in root layout; `buildEncryptedMembersCheckInsBundleForMesh`; dev send uses mesh-sized real bundle; ciphertext cap **211** B UTF-8.
+- [x] **Mesh chunking** Envelope **v2** (+ **`tryParseEmberMeshWirePayload`**); **`emberMeshChunkReassembly`** (TTL, size caps); **`sendEmberMeshMessageUtf8`** (v1 fast path or v2 + inter-frame delay); dev send = **full** `buildEncryptedMembersCheckInsBundle`.
 - [x] **P3** Serialized ToRadio writes, `closing` guard, Meshtastic `disconnect` ToRadio before `cancelConnection`, ordered `destroy()`.
-- [ ] **P4** Golden fixtures in repo + CI.
-- [ ] **P5** Crisis UI mesh strip; copy review vs MVP-GUIDE.
+- [x] **P4** Golden **`ToRadio`** wire fixtures (`wireGolden.ts`) + Jest regression tests + **`print-mesh-wire-golden.mjs`** (see MESHTASTIC-BLE.md Tests).
+- [x] **P5** Product-facing mesh status: **`MeshRadioProvider`** in `app/_layout.tsx`, shared store, Home/Status copy (roster vs LoRa bridge); crisis tint on radio line; crisis tab label **People** (not “Mesh”) with roster explainer; **Mesh snapshot sent** alert on successful broadcast. **Residual:** last send/recv timestamps, richer crisis mesh surface, adaptive airtime, formal MVP-GUIDE / pilot sign-off.

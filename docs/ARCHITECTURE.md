@@ -14,7 +14,7 @@ The application operates in three modes:
 
 **Peacetime** — Community coordination, resource tracking, preparedness drills, skill registry, emergency plan storage, and gamified readiness scoring. Data syncs optionally to encrypted cloud backup.
 
-**Crisis** — Simplified interface focused on safety check-ins, resource requests, and mesh communication. All data stays local or travels device-to-device. No server communication.
+**Crisis** — Simplified interface focused on safety check-ins, resource visibility, and **Meshtastic-assisted** sync when a radio is paired (Phase B snapshots over LoRa; controls on **Status** and **Config**). Tier 1 does not require cloud. Optional cloud (peacetime) is orthogonal to crisis navigation.
 
 **Recovery** — Post-crisis coordination for damage assessment, resource redistribution, and community status reporting. Gradual reconnection to cloud sync.
 
@@ -185,86 +185,69 @@ EMBER supports three transport layers for peer sync, selected automatically base
 
 **Cloud sync (peacetime only)** — Optional encrypted backup to a community-hosted server. The server receives and stores ciphertext. It facilitates sync between devices but cannot read any data. Implementation: HTTPS PUT/GET of encrypted blobs.
 
-**Bluetooth Low Energy (BLE)** — Direct device-to-device sync within ~30m range. Used for in-person community meetings,。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。neighbor check-ins, and crisis-mode local coordination.
+**Bluetooth Low Energy (BLE)** — Short-range wireless. In the current app, BLE is the **Meshtastic GATT client** (phone ↔ LoRa radio), not yet a separate EMBER-to-EMBER file channel. Peer sync for members/check-ins today uses **Phase B bundles** (sneaker-net, optional HTTP relay, or Meshtastic portnum 270 payloads).
 
 **Meshtastic LoRa (crisis mode)** — Long-range mesh radio via BLE bridge to Meshtastic hardware. 1-5km range per node. Solar-powered relay nodes extend coverage indefinitely. The primary crisis communication channel.
 
-### 5.2 Meshtastic Integration
+### 5.2 Meshtastic integration (implemented)
 
-The app connects to a Meshtastic radio via BLE. The integration layer handles:
+The **Tier 1** client is documented in [MESHTASTIC-BLE.md](./MESHTASTIC-BLE.md). In summary:
 
-**BLE Connection Management** — Persistent BLE service with automatic reconnection. On Android, BLE connections are notoriously unreliable; the service implements exponential backoff reconnection with a message queue that holds outbound messages during disconnection.
+- **Transport** — `react-native-ble-plx` GATT connection, `want_config` handshake, framed `ToRadio` / `FromRadio` / `FromNum` mailbox reads, optional MTU raise.
+- **Application port** — **portnum 270** carries an EMBER envelope (**v1** single frame or **v2** chunked UTF-8) wrapping the same **Phase B encrypted bundle** (members + check-ins) used for sneaker-net and relay.
+- **Send path** — User-initiated **Broadcast encrypted snapshot** queues framed packets on the BLE bridge (serialized writes, retry on transient errors for chunked sends). Large bundles use v2 with configurable inter-chunk delay.
+- **Receive path** — Inbound frames are parsed, reassembled (v2), fingerprint-matched to the current community, decrypted, and merged via `mergeMembersCheckInsPayload`.
+- **Privacy / trust** — Meshtastic RF encryption is independent of EMBER’s NaCl layer; treat mesh participants as untrusted for EMBER identity (see threat-model docs).
 
-**Payload Compression** — Meshtastic imposes a 237-byte maximum payload per packet. EMBER's sync deltas must fit within this constraint. The compaction algorithm:
-
-1. Serialize CRDT deltas to Protocol Buffer format
-2. Sort by priority (safety check-ins first, then resource updates, then general messages)
-3. Pack as many deltas as fit in 237 bytes
-4. If a single delta exceeds 237 bytes, fragment across multiple packets with sequence numbering
-
-**Message Priority** (highest to lowest):
-1. Safety check-ins (I am safe / I need help)
-2. Resource requests (critical needs)
-3. Resource updates (inventory changes)
-4. General messages (community communication)
-5. Sync metadata (CRDT state vectors)
-
-**Delivery Confirmation** — Each message includes a 4-byte hash. Receiving nodes send ACK packets. Unacknowledged messages are retransmitted with exponential backoff up to 5 attempts.
-
-**Encryption** — Meshtastic already provides AES-256 channel encryption. EMBER adds an additional application-layer encryption using the community NaCl key, providing defense-in-depth. Even if the Meshtastic channel key is compromised, community data remains encrypted.
+**Roadmap (not current code)** — Delta-sized CRDT packets, mesh-wide ACK scheduling, automatic exponential backoff reconnect with queued mail during BLE drops, and topology maps remain design targets.
 
 ### 5.3 Sync Flow
 
-**Peacetime sync:**
-1. Device generates CRDT deltas since last sync
-2. Deltas are encrypted with community key
-3. Encrypted payload is sent to cloud backup server (if configured)
-4. Other devices pull encrypted payload, decrypt, merge CRDTs
-5. Sync is periodic (configurable, default every 15 minutes) and on-demand
+**Peacetime sync (data model):**
+1. Local changes update WatermelonDB models (resources, drills, plans, members, check-ins, etc.).
+2. **Members + check-ins** can sync cross-device via **Phase B**: encrypted bundle export/import (sneaker-net), optional **HTTP relay** when enabled, or Meshtastic **portnum 270** snapshot push/pull when radios are paired.
+3. Optional **cloud** encrypted blob backup (when implemented per deployment) follows the same ciphertext-on-wire rule: server never receives keys.
+4. Other domains (full resource CRDT over mesh, etc.) remain **product gaps** relative to this spec.
 
-**Crisis sync:**
-1. Device generates CRDT deltas since last sync
-2. Deltas are encrypted, compressed, and prioritized
-3. Payload is sent via BLE to Meshtastic radio
-4. Radio broadcasts to mesh network
-5. Receiving devices decrypt and merge
-6. ACK packets confirm delivery
-7. Undelivered messages are retried
+**Crisis / mesh snapshot path (when Meshtastic is connected):**
+1. App builds the Phase B ciphertext bundle for the active community.
+2. Bundle is sent to the paired radio over BLE as **portnum 270** (v1 or chunked v2).
+3. Radio transmits over LoRa; peers running EMBER decrypt+merge when the **community fingerprint** matches.
+4. **No application-layer ACK** in the prototype; reliability is RF-dependent. UX surfaces **Last mesh import** plus **Mesh snapshot sent** after a successful queued send.
 
 ---
 
 ## 6. Crisis Mode Architecture
 
-### 6.1 Mode Switching
+### 6.1 Mode switching
 
-Crisis mode can be activated:
+**Implemented:** crisis vs peacetime is selected by the user via the app **mode toggle** (persisted in app state).
 
-- Manually by any community member (via UI toggle)
-- Automatically when the device detects loss of cellular and WiFi connectivity for a configurable period (default: 30 minutes)
-- Via mesh message from another community member who has already activated crisis mode
+**Not implemented in this client yet:** automatic crisis entry on sustained loss of cellular/WiFi, or automatic crisis activation triggered by an inbound mesh message.
 
-### 6.2 UI Adaptation
+### 6.2 UI adaptation
 
-Crisis mode transforms the interface:
+**Implemented (current tab layout):**
 
-- Navigation simplifies from 6 tabs to 4 (Status, Supply, Mesh, Plans)
-- Color system shifts from warm amber to alert red
-- Non-essential features are hidden (gamification, achievements, settings customization)
-- Check-in button becomes more prominent
-- Mesh message feed is always visible
-- Battery level indicator appears in header
+- Navigation simplifies from **6 tabs** (Home, People, Supply, Drills, Plans, Config) to **4**: **Status**, **Supply**, **People**, **Plans**. **Config** is not in the crisis tab bar but remains reachable from **Status** (Home) via navigation to **`/(tabs)/settings`** for mesh pairing and diagnostics.
+- Color system shifts toward alert styling (crisis theme).
+- **Drills** and most **Config** chrome are hidden from the tab bar in crisis; core mesh controls live under **Config → Mesh Network**.
+- **People** in crisis is the **member roster** (same screen concept as peacetime **People**), with copy clarifying that **LoRa / Meshtastic tools** are on **Status** + **Config**, not on the roster tab.
+- **Status** (crisis Home) shows a **mesh** summary from `useMeshRadioStore`, optional **Broadcast encrypted snapshot**, and link to Config when needed.
 
-### 6.3 Power Management
+**Design / mockup carryovers not fully mirrored in code:** a dedicated “mesh message feed” screen, always-on feed UI, and granular battery header widgets may lag the static architecture deck.
 
-During extended outages, battery life is critical. Crisis mode implements:
+### 6.3 Power management (targets)
 
-- **BLE duty cycling** — Radio scans at reduced frequency (every 30 seconds instead of continuous)
-- **Background task scheduling** — Sync operations batched to minimize wake-ups
-- **Minimal rendering** — Animations disabled, image rendering deferred, dark UI (fewer lit pixels on OLED)
-- **Screen timeout override** — Screen dims aggressively (5 second timeout vs normal 30 second)
-- **CPU throttling** — CRDT merge operations deferred until device is charging or battery above 20%
+Long crisis runtime is a **design goal**. Items below are **not all implemented** in the current TypeScript client; treat as roadmap unless verified in source:
 
-Target: 72+ hours of crisis mode operation on a single charge (assuming modern smartphone with 4000+ mAh battery).
+- **BLE duty cycling** — Reduce scan/connect churn when the radio is idle.
+- **Background batching** — Batch DB/sync work.
+- **Minimal rendering** — Reduce animation and overscroll cost on OLED.
+- **Aggressive screen dim** — Shorter sleep timeout during crisis.
+- **Merge throttling** — Defer heavy CRDT work when battery is low.
+
+Target: 72+ hours of crisis operation remains an **engineering north star**, not a shipped guarantee.
 
 ---
 
@@ -406,7 +389,7 @@ EMBER Tier 1 requires zero backend infrastructure. The app is fully functional w
 EMBER Node Kits are pre-configured Meshtastic relay nodes. The app integrates via:
 
 - BLE pairing protocol (standard Meshtastic BLE API)
-- **Current Tier 1 prototype:** scan, connect, MTU negotiation, `want_config` / FromRadio drain, and FromNum-driven mailbox reads — see [MESHTASTIC-BLE.md](./MESHTASTIC-BLE.md).
+- **Current app (Tier 1) Meshtastic client:** scan, connect, MTU negotiation, handshake, **portnum 270** send/recv with Phase B merge — see [MESHTASTIC-BLE.md](./MESHTASTIC-BLE.md).
 - Node status monitoring (battery level, solar charge, signal strength)
 - Network topology visualization
 - Remote firmware update (planned)

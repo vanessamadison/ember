@@ -29,7 +29,7 @@ export default function TabsLayout() {
   const crisisTabs = [
     { name: 'index', title: 'Status', icon: '◉' },
     { name: 'resources', title: 'Supply', icon: '◫' },
-    { name: 'community', title: 'Mesh', icon: '◎' },
+    { name: 'community', title: 'People', icon: '◎' },
     { name: 'plans', title: 'Plans', icon: '◈' },
   ];
 

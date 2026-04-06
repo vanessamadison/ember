@@ -7,8 +7,12 @@ export type {
 export { MEMBERS_CHECK_INS_BUNDLE_VERSION } from './types';
 export {
   buildEncryptedMembersCheckInsBundle,
+  buildEncryptedMembersCheckInsBundleForMesh,
   decryptMembersCheckInsBundleJson,
 } from './snapshot';
+export { mergeFromEmberMeshEnvelopeForCommunity } from './meshInboundMerge';
+export type { MeshInboundMergeResult } from './meshInboundMerge';
+export { MeshSyncInboundBridge } from './MeshSyncInboundBridge';
 export { mergeMembersCheckInsPayload } from './merge';
 export {
   exportMembersCheckInsSneakerBase64,

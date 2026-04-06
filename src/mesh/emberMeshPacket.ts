@@ -19,16 +19,14 @@ export function bytesToHexPreview(bytes: Uint8Array, maxBytes = 96): string {
 }
 
 /**
- * Build ToRadio.body bytes: MeshPacket(decoded Data with EMBER portnum + envelope payload).
+ * Build ToRadio.body bytes: MeshPacket(decoded Data with EMBER portnum + wire envelope bytes).
  */
-export function encodeEmberMeshDataPacketToRadio(
-  fingerprint16: Uint8Array,
-  ciphertext: Uint8Array
+export function encodeEmberMeshWireBytesToRadio(
+  envelopeWireBytes: Uint8Array
 ): Uint8Array {
-  const envelope = buildEmberMeshEnvelopeV1(fingerprint16, ciphertext);
   const data = create(Mesh.DataSchema, {
     portnum: EMBER_MESH_PORTNUM,
-    payload: envelope,
+    payload: envelopeWireBytes,
     wantResponse: false,
     dest: 0,
     source: 0,
@@ -46,4 +44,15 @@ export function encodeEmberMeshDataPacketToRadio(
     payloadVariant: { case: 'packet', value: packet },
   });
   return toBinary(Mesh.ToRadioSchema, toRadio);
+}
+
+/**
+ * Build ToRadio.body bytes: MeshPacket(decoded Data with EMBER portnum + v1 envelope).
+ */
+export function encodeEmberMeshDataPacketToRadio(
+  fingerprint16: Uint8Array,
+  ciphertext: Uint8Array
+): Uint8Array {
+  const envelope = buildEmberMeshEnvelopeV1(fingerprint16, ciphertext);
+  return encodeEmberMeshWireBytesToRadio(envelope);
 }

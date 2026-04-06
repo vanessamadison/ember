@@ -9,6 +9,7 @@ import {
   TextInput,
   ActivityIndicator,
   Linking,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as Clipboard from 'expo-clipboard';
@@ -23,18 +24,19 @@ import {
   getRelayBaseUrl,
 } from '../../src/sync';
 import { renewCommunityInviteWindow } from '../../src/db/communityLifecycle';
+import { useMeshRadio } from '../../src/context/MeshRadioContext';
+import type { DiscoveredRadio } from '../../src/mesh/meshtasticBleBridge';
+import { useMeshRadioStore } from '../../src/mesh/meshRadioStore';
 import {
-  MeshtasticBleBridge,
-  type BlePoweredState,
-  type DiscoveredRadio,
-} from '../../src/mesh/meshtasticBleBridge';
-import { communityMeshFingerprint16 } from '../../src/mesh/communityFingerprint';
-import { dispatchEmberMeshFromFromRadio, setEmberMeshInboundListener } from '../../src/mesh/emberMeshInbound';
-import { bytesToHexPreview, encodeEmberMeshDataPacketToRadio } from '../../src/mesh/emberMeshPacket';
+  dispatchEmberMeshFromFromRadio,
+  subscribeEmberMeshInbound,
+} from '../../src/mesh/emberMeshInbound';
+import { useMeshBroadcastSnapshot } from '../../src/hooks/useMeshBroadcastSnapshot';
+import { MESH_INTER_CHUNK_DELAY_CHOICES } from '../../src/mesh/meshInterChunkDelayPreference';
 import { digestFromRadioMessages } from '../../src/mesh/fromRadioSummary';
-import { MeshtasticSession } from '../../src/mesh/meshtasticSession';
 import type { FromRadioMessage } from '../../src/mesh/meshtasticCodec';
 import { bleMeshGuidance, bleStateLabel } from '../../src/mesh/bleUserStrings';
+import { requestBleScanRuntimePermissions } from '../../src/mesh/requestAndroidBleScanPermissions';
 
 const MESH_LOG_MAX_LINES = 14;
 
@@ -296,20 +298,29 @@ export default function SettingsScreen() {
     Boolean(currentCommunityId && currentCommunityId !== '__none__') &&
     cryptoReady;
 
-  const meshBridgeRef = useRef<MeshtasticBleBridge | null>(null);
-  const meshSessionRef = useRef<MeshtasticSession | null>(null);
+  const meshApi = useMeshRadio();
+  const meshNativeOk = useMeshRadioStore((s) => s.nativeBleOk);
+  const meshBleState = useMeshRadioStore((s) => s.bleState);
+  const meshConnectedId = useMeshRadioStore((s) => s.connectedDeviceId);
+  const meshHandshakeBusy = useMeshRadioStore((s) => s.handshakeBusy);
+  const meshNodeNum = useMeshRadioStore((s) => s.nodeNum);
+  const meshInboundLast = useMeshRadioStore((s) => s.meshInboundLast);
   const meshFromNumStopRef = useRef<(() => void) | null>(null);
-  const [meshNativeOk, setMeshNativeOk] = useState(false);
-  const [meshBleState, setMeshBleState] = useState<BlePoweredState>('Unknown');
   const [meshScanning, setMeshScanning] = useState(false);
   const [meshDevices, setMeshDevices] = useState<DiscoveredRadio[]>([]);
-  const [meshConnectedId, setMeshConnectedId] = useState<string | null>(null);
   const [meshError, setMeshError] = useState<string | null>(null);
-  const [meshHandshakeBusy, setMeshHandshakeBusy] = useState(false);
   const [meshProtoLog, setMeshProtoLog] = useState('');
-  const [meshNodeNum, setMeshNodeNum] = useState<number | null>(null);
   const [meshLastTxHex, setMeshLastTxHex] = useState<string | null>(null);
   const [meshInboundNote, setMeshInboundNote] = useState<string | null>(null);
+  const {
+    broadcastBusy: meshBroadcastBusy,
+    broadcastSnapshot: meshBroadcastSnapshot,
+    canBroadcast: meshBroadcastAllowed,
+    interChunkDelayMs,
+    setInterChunkDelayMs,
+  } = useMeshBroadcastSnapshot({
+    onTxPreview: (p) => setMeshLastTxHex(p),
+  });
 
   const stopMeshRadioSubscription = () => {
     meshFromNumStopRef.current?.();
@@ -328,7 +339,7 @@ export default function SettingsScreen() {
       expectedConfigId
     );
     if (nodeNum != null) {
-      setMeshNodeNum(nodeNum);
+      useMeshRadioStore.getState().setNodeNum(nodeNum);
     }
     const chunk = lines.join('\n');
     if (!chunk) return;
@@ -338,13 +349,13 @@ export default function SettingsScreen() {
   };
 
   const runMeshtasticHandshakeAfterConnect = async () => {
-    const session = meshSessionRef.current;
-    const bridge = meshBridgeRef.current;
+    const session = meshApi?.session;
+    const bridge = meshApi?.bridge;
     if (!session || !bridge || !bridge.getConnectedDeviceId()) return;
 
     stopMeshRadioSubscription();
     session.resetStream();
-    setMeshHandshakeBusy(true);
+    useMeshRadioStore.getState().setHandshakeBusy(true);
     setMeshError(null);
     try {
       const { configId, fromRadioMessages } =
@@ -368,39 +379,16 @@ export default function SettingsScreen() {
     } catch (e) {
       setMeshError(e instanceof Error ? e.message : String(e));
     } finally {
-      setMeshHandshakeBusy(false);
+      useMeshRadioStore.getState().setHandshakeBusy(false);
     }
   };
 
   useEffect(() => {
-    const bridge = new MeshtasticBleBridge();
-    meshBridgeRef.current = bridge;
-    meshSessionRef.current = new MeshtasticSession(bridge);
-    setMeshNativeOk(bridge.isNativeBleAvailable());
-    let unsubState = () => {};
-    if (bridge.isNativeBleAvailable()) {
-      void bridge.getBluetoothState().then(setMeshBleState);
-      unsubState = bridge.subscribeState(setMeshBleState);
-    } else {
-      setMeshBleState('Unsupported');
-    }
-    return () => {
-      meshFromNumStopRef.current?.();
-      meshFromNumStopRef.current = null;
-      unsubState();
-      bridge.destroy();
-      meshBridgeRef.current = null;
-      meshSessionRef.current = null;
-    };
-  }, []);
-
-  useEffect(() => {
-    setEmberMeshInboundListener((inbound) => {
+    return subscribeEmberMeshInbound((inbound) => {
       setMeshInboundNote(
-        `Inbound EMBER v1 envelope: ${inbound.ciphertext.length} B ciphertext`
+        `Inbound EMBER v1 envelope: ${inbound.ciphertext.length} B ciphertext (${inbound.fingerprint.length} B fp)`
       );
     });
-    return () => setEmberMeshInboundListener(null);
   }, []);
 
   const profileInitial = (
@@ -730,12 +718,36 @@ export default function SettingsScreen() {
               Meshtastic BLE: scan, connect, MTU 512, then want_config on ToRadio and decode FromRadio (official
               protobufs). FromNum notifications drain new mailbox data. Radio traffic is untrusted for EMBER crypto.
             </Text>
+            {!meshApi ? (
+              <Text style={styles.syncHelp}>Initializing Bluetooth stack…</Text>
+            ) : null}
             <View style={styles.contentRow}>
               <Text style={styles.contentLabel}>Bluetooth</Text>
               <Text style={[styles.contentValue, { flex: 1, textAlign: 'right' }]}>
                 {bleStateLabel(meshBleState)}
               </Text>
             </View>
+            {meshNativeOk && meshApi ? (
+              <Pressable
+                style={[styles.syncButton, { marginTop: 8 }]}
+                onPress={() => {
+                  void (async () => {
+                    const b = meshApi.bridge;
+                    try {
+                      const s = await b.getBluetoothState();
+                      useMeshRadioStore.getState().setBleState(s);
+                      setMeshError(null);
+                    } catch (e) {
+                      setMeshError(
+                        e instanceof Error ? e.message : String(e)
+                      );
+                    }
+                  })();
+                }}
+              >
+                <Text style={styles.syncButtonText}>Refresh Bluetooth state</Text>
+              </Pressable>
+            ) : null}
             {!meshNativeOk ? (
               <Text style={styles.syncHelp}>
                 Mesh Bluetooth needs a native development build with react-native-ble-plx (Expo Go and web
@@ -795,36 +807,75 @@ export default function SettingsScreen() {
                 {meshInboundNote}
               </Text>
             ) : null}
+            {meshInboundLast ? (
+              <Text
+                style={[
+                  styles.meshProtoLog,
+                  { color: meshInboundLast.ok ? '#86efac' : '#f87171' },
+                ]}
+              >
+                {meshInboundLast.ok
+                  ? `Mesh import ${new Date(meshInboundLast.at).toLocaleString()}: +${meshInboundLast.membersInserted} members, +${meshInboundLast.checkInsInserted} check-ins`
+                  : `Mesh import ${new Date(meshInboundLast.at).toLocaleString()}: ${meshInboundLast.reason}${meshInboundLast.detail ? ` — ${meshInboundLast.detail}` : ''}`}
+              </Text>
+            ) : null}
             <Pressable
               style={[
                 styles.syncButton,
                 {
                   opacity:
-                    meshBleState !== 'PoweredOn' || !meshNativeOk || meshScanning
+                    !meshApi ||
+                    meshBleState !== 'PoweredOn' ||
+                    !meshNativeOk ||
+                    meshScanning
                       ? 0.45
                       : 1,
                 },
               ]}
-              disabled={meshBleState !== 'PoweredOn' || !meshNativeOk || meshScanning}
+              disabled={
+                !meshApi ||
+                meshBleState !== 'PoweredOn' ||
+                !meshNativeOk ||
+                meshScanning
+              }
               onPress={() => {
-                const b = meshBridgeRef.current;
-                if (!b || !meshNativeOk) return;
-                setMeshError(null);
-                setMeshDevices([]);
-                setMeshScanning(true);
-                b.startScan(
-                  (d) => {
-                    setMeshDevices((prev) => {
-                      if (prev.some((x) => x.id === d.id)) return prev;
-                      return [...prev, d];
-                    });
-                  },
-                  (err) => {
-                    setMeshError(err.message);
-                    b.stopScan();
-                    setMeshScanning(false);
+                void (async () => {
+                  const b = meshApi?.bridge;
+                  if (!b || !meshNativeOk) return;
+                  setMeshError(null);
+                  if (Platform.OS === 'android') {
+                    const perm = await requestBleScanRuntimePermissions();
+                    if (!perm.ok) {
+                      setMeshError(
+                        perm.denied
+                          ? 'Bluetooth permission denied. Allow Nearby devices / Bluetooth for EMBER in system settings, then tap Refresh Bluetooth state.'
+                          : 'Could not obtain Bluetooth permission for scan.'
+                      );
+                      return;
+                    }
+                    try {
+                      const s = await b.getBluetoothState();
+                      useMeshRadioStore.getState().setBleState(s);
+                    } catch {
+                      /* ignore refresh errors; scan may still work */
+                    }
                   }
-                );
+                  setMeshDevices([]);
+                  setMeshScanning(true);
+                  b.startScan(
+                    (d) => {
+                      setMeshDevices((prev) => {
+                        if (prev.some((x) => x.id === d.id)) return prev;
+                        return [...prev, d];
+                      });
+                    },
+                    (err) => {
+                      setMeshError(err.message);
+                      b.stopScan();
+                      setMeshScanning(false);
+                    }
+                  );
+                })();
               }}
             >
               <Text style={styles.syncButtonText}>
@@ -838,7 +889,7 @@ export default function SettingsScreen() {
               ]}
               disabled={!meshScanning}
               onPress={() => {
-                meshBridgeRef.current?.stopScan();
+                meshApi?.bridge?.stopScan();
                 setMeshScanning(false);
               }}
             >
@@ -853,15 +904,14 @@ export default function SettingsScreen() {
               disabled={!meshConnectedId}
               onPress={() => {
                 void (async () => {
-                  const b = meshBridgeRef.current;
-                  const session = meshSessionRef.current;
+                  const b = meshApi?.bridge;
+                  const session = meshApi?.session;
                   if (!b) return;
                   try {
                     stopMeshRadioSubscription();
                     session?.resetStream();
                     await b.disconnect();
-                    setMeshConnectedId(null);
-                    setMeshNodeNum(null);
+                    useMeshRadioStore.getState().clearSessionFields();
                     setMeshProtoLog('');
                     setMeshLastTxHex(null);
                     setMeshInboundNote(null);
@@ -883,17 +933,25 @@ export default function SettingsScreen() {
                 styles.syncButton,
                 {
                   opacity:
-                    !meshConnectedId || meshHandshakeBusy || !meshNativeOk
+                    !meshConnectedId ||
+                    meshHandshakeBusy ||
+                    meshBroadcastBusy ||
+                    !meshNativeOk
                       ? 0.45
                       : 1,
                 },
               ]}
-              disabled={!meshConnectedId || meshHandshakeBusy || !meshNativeOk}
+              disabled={
+                !meshConnectedId ||
+                meshHandshakeBusy ||
+                meshBroadcastBusy ||
+                !meshNativeOk
+              }
               onPress={() => {
                 void (async () => {
-                  const session = meshSessionRef.current;
+                  const session = meshApi?.session;
                   if (!session || !meshConnectedId) return;
-                  setMeshHandshakeBusy(true);
+                  useMeshRadioStore.getState().setHandshakeBusy(true);
                   setMeshError(null);
                   try {
                     const { configId, fromRadioMessages } =
@@ -904,7 +962,7 @@ export default function SettingsScreen() {
                       e instanceof Error ? e.message : String(e)
                     );
                   } finally {
-                    setMeshHandshakeBusy(false);
+                    useMeshRadioStore.getState().setHandshakeBusy(false);
                   }
                 })();
               }}
@@ -913,70 +971,81 @@ export default function SettingsScreen() {
                 Re-request config (want_config)
               </Text>
             </Pressable>
-            {__DEV__ ? (
-              <Pressable
-                style={[
-                  styles.syncButton,
-                  {
-                    opacity:
-                      !meshConnectedId ||
-                      meshHandshakeBusy ||
-                      !meshNativeOk ||
-                      !currentCommunityId ||
-                      currentCommunityId === '__none__'
-                        ? 0.45
-                        : 1,
-                  },
-                ]}
-                disabled={
-                  !meshConnectedId ||
-                  meshHandshakeBusy ||
-                  !meshNativeOk ||
-                  !currentCommunityId ||
-                  currentCommunityId === '__none__'
-                }
-                onPress={() => {
-                  void (async () => {
-                    const session = meshSessionRef.current;
-                    const cid = currentCommunityId;
-                    if (!session || !cid || cid === '__none__') return;
-                    setMeshError(null);
-                    try {
-                      const fp = await communityMeshFingerprint16(cid);
-                      const cipher = new Uint8Array([0xde, 0x76, 0x01]);
-                      const body = encodeEmberMeshDataPacketToRadio(fp, cipher);
-                      setMeshLastTxHex(bytesToHexPreview(body));
-                      await session.sendEmberMeshCiphertext(fp, cipher);
-                    } catch (e) {
-                      Alert.alert(
-                        'Dev mesh send failed',
-                        e instanceof Error ? e.message : String(e)
-                      );
-                    }
-                  })();
-                }}
-              >
-                <Text style={styles.syncButtonText}>
-                  [Dev] Send test EMBER mesh payload
-                </Text>
-              </Pressable>
-            ) : null}
+            <Text style={styles.syncHelp}>
+              Chunked mesh sends pause between packets. Increase if your radio drops multi-part
+              snapshots (saved on device).
+            </Text>
+            <View
+              style={{
+                flexDirection: 'row',
+                flexWrap: 'wrap',
+                gap: 8,
+                marginTop: 8,
+                marginBottom: 12,
+              }}
+            >
+              {MESH_INTER_CHUNK_DELAY_CHOICES.map((ms) => (
+                <Pressable
+                  key={ms}
+                  onPress={() => {
+                    void setInterChunkDelayMs(ms);
+                  }}
+                  style={{
+                    paddingVertical: 8,
+                    paddingHorizontal: 12,
+                    borderRadius: 6,
+                    borderWidth: 1,
+                    borderColor:
+                      interChunkDelayMs === ms ? '#d4a574' : '#333333',
+                    backgroundColor:
+                      interChunkDelayMs === ms
+                        ? 'rgba(212, 165, 116, 0.15)'
+                        : '#1a1a1a',
+                  }}
+                >
+                  <Text style={{ color: '#e5e5e5', fontSize: 12 }}>{ms} ms</Text>
+                </Pressable>
+              ))}
+            </View>
+            <Pressable
+              style={[
+                styles.syncButton,
+                {
+                  opacity:
+                    !meshBroadcastAllowed || meshBroadcastBusy ? 0.45 : 1,
+                },
+              ]}
+              disabled={!meshBroadcastAllowed || meshBroadcastBusy}
+              onPress={() => {
+                setMeshError(null);
+                void meshBroadcastSnapshot();
+              }}
+            >
+              <Text style={styles.syncButtonText}>
+                {meshBroadcastBusy
+                  ? 'Broadcasting snapshot…'
+                  : 'Broadcast encrypted snapshot over mesh'}
+              </Text>
+            </Pressable>
             {meshDevices.map((d) => (
               <Pressable
                 key={d.id}
                 style={styles.meshDeviceRow}
                 onPress={() => {
                   void (async () => {
-                    const b = meshBridgeRef.current;
+                    const b = meshApi?.bridge;
                     if (!b || !meshNativeOk) return;
                     try {
                       setMeshError(null);
                       setMeshProtoLog('');
-                      setMeshNodeNum(null);
+                      useMeshRadioStore.getState().setNodeNum(null);
+                      useMeshRadioStore.getState().setConnectedDeviceId(null);
                       setMeshLastTxHex(null);
                       setMeshInboundNote(null);
                       await b.connect(d.id);
-                      setMeshConnectedId(b.getConnectedDeviceId());
+                      useMeshRadioStore
+                        .getState()
+                        .setConnectedDeviceId(b.getConnectedDeviceId());
                       b.stopScan();
                       setMeshScanning(false);
                       await runMeshtasticHandshakeAfterConnect();

@@ -1,3 +1,4 @@
+import { Platform } from 'react-native';
 import type { BlePoweredState } from './meshtasticBleBridge';
 
 /** Short label for UI chips. */
@@ -30,6 +31,12 @@ export interface BleGuidance {
  */
 export function bleMeshGuidance(state: BlePoweredState): BleGuidance {
   switch (state) {
+    case 'Unknown':
+      return {
+        hint:
+          'Bluetooth status is still settling. Wait a few seconds, tap Refresh Bluetooth state below, or toggle system Bluetooth and return.',
+        suggestOpenSettings: false,
+      };
     case 'PoweredOn':
       return {
         hint: 'Bluetooth is on. You can scan for Meshtastic-compatible radios.',
@@ -44,7 +51,9 @@ export function bleMeshGuidance(state: BlePoweredState): BleGuidance {
     case 'Unauthorized':
       return {
         hint:
-          'EMBER needs Bluetooth access to reach your radio. Tap below to open Settings, enable Bluetooth for EMBER, and try again.',
+          Platform.OS === 'android'
+            ? 'EMBER needs Bluetooth permission. Open app settings below, enable Nearby devices / Bluetooth (wording varies by phone), then tap Refresh Bluetooth state.'
+            : 'EMBER needs Bluetooth access to reach your radio. Tap below to open Settings for EMBER, turn on Bluetooth permission, then return here.',
         suggestOpenSettings: true,
       };
     case 'Unsupported':

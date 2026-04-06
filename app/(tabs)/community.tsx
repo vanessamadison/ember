@@ -114,6 +114,19 @@ const styles = StyleSheet.create({
   memberRow: {
     marginBottom: 12,
   },
+  crisisMeshNote: {
+    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(239, 68, 68, 0.35)',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 16,
+  },
+  crisisMeshNoteText: {
+    fontSize: 12,
+    color: '#fca5a5',
+    lineHeight: 18,
+  },
 });
 
 export default function CommunityScreen() {
@@ -186,6 +199,15 @@ export default function CommunityScreen() {
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.header}>
           <Text style={styles.title}>Community</Text>
+          {mode === 'crisis' ? (
+            <View style={styles.crisisMeshNote}>
+              <Text style={styles.crisisMeshNoteText}>
+                In crisis mode this tab is the member roster (safe / help / skills). LoRa mesh
+                pairing, snapshot broadcast, and full diagnostics are on the Status tab and under
+                Config — not here — so the bottom tab still says People like peacetime.
+              </Text>
+            </View>
+          ) : null}
           {inviteBannerText ? (
             <View style={styles.inviteBanner}>
               <Text style={styles.inviteBannerText}>{inviteBannerText}</Text>

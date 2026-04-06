@@ -11,5 +11,7 @@ describe('bleUserStrings', () => {
     expect(bleMeshGuidance('PoweredOff').suggestOpenSettings).toBe(true);
     expect(bleMeshGuidance('PoweredOn').suggestOpenSettings).toBe(false);
     expect(bleMeshGuidance('Unsupported').hint).toMatch(/web/);
+    expect(bleMeshGuidance('Unknown').suggestOpenSettings).toBe(false);
+    expect(bleMeshGuidance('Unknown').hint).toMatch(/Refresh/i);
   });
 });

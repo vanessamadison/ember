@@ -1,9 +1,12 @@
 import React, { useMemo } from 'react';
+import { router } from 'expo-router';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
+  Pressable,
+  Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
@@ -14,6 +17,10 @@ import {
 import { STATUS } from '../../src/constants';
 import { useApp } from '../../src/context/AppContext';
 import { useCommunity } from '../../src/context/CommunityContext';
+import { getCryptoSession } from '../../src/crypto/session';
+import { useMeshBroadcastSnapshot } from '../../src/hooks/useMeshBroadcastSnapshot';
+import { bleStateLabel } from '../../src/mesh/bleUserStrings';
+import { useMeshRadioStore } from '../../src/mesh/meshRadioStore';
 import { getTheme } from '../../src/theme';
 
 const styles = StyleSheet.create({
@@ -169,10 +176,56 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     paddingVertical: 16,
   },
+  meshImportLine: {
+    fontSize: 12,
+    marginTop: 10,
+    lineHeight: 18,
+    fontFamily: 'Courier New',
+  },
+  meshCrisisActions: {
+    marginTop: 14,
+    gap: 10,
+  },
+  meshCrisisButton: {
+    backgroundColor: 'rgba(239, 68, 68, 0.14)',
+    borderWidth: 1,
+    borderColor: '#ef4444',
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderRadius: 8,
+  },
+  meshCrisisButtonDisabled: {
+    opacity: 0.45,
+  },
+  meshCrisisButtonText: {
+    color: '#fca5a5',
+    fontSize: 14,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  meshConfigLink: {
+    marginTop: 10,
+    alignSelf: 'flex-start',
+  },
+  meshConfigLinkText: {
+    color: '#d4a574',
+    fontSize: 13,
+  },
 });
 
 export default function HomeScreen() {
-  const { mode } = useApp();
+  const { mode, isOnboarded, currentCommunityId } = useApp();
+  const cryptoReady = Boolean(getCryptoSession()?.isInitialized());
+  const meshNativeOk = useMeshRadioStore((s) => s.nativeBleOk);
+  const meshBleState = useMeshRadioStore((s) => s.bleState);
+  const meshConnectedId = useMeshRadioStore((s) => s.connectedDeviceId);
+  const meshNodeNum = useMeshRadioStore((s) => s.nodeNum);
+  const meshInboundLast = useMeshRadioStore((s) => s.meshInboundLast);
+  const {
+    broadcastBusy: meshBroadcastBusy,
+    broadcastSnapshot: meshBroadcastSnapshot,
+    canBroadcast: meshBroadcastAllowed,
+  } = useMeshBroadcastSnapshot();
   const {
     members,
     resources,
@@ -231,8 +284,97 @@ export default function HomeScreen() {
             </View>
           </View>
           <Text style={styles.meshLabel}>
-            {mode === 'crisis' ? `${members.length} members connected` : `${members.length} members online`}
+            Community data: {members.length} member
+            {members.length !== 1 ? 's' : ''} (synced/offline roster — not the same as LoRa link
+            quality or range).
           </Text>
+          <Text
+            style={[
+              styles.meshLabel,
+              mode === 'crisis' && { color: '#fca5a5' },
+            ]}
+          >
+            {!meshNativeOk
+              ? 'Mesh radio: requires a native build with BLE (see Settings → Mesh Network).'
+              : meshConnectedId
+                ? `LoRa bridge: connected${
+                    meshNodeNum != null ? ` (node ${meshNodeNum})` : ''
+                  }. This does not replace cellular or internet.`
+                : `LoRa bridge: not connected. Bluetooth: ${bleStateLabel(
+                    meshBleState,
+                  )}. Pair a radio in Settings → Mesh Network.`}
+          </Text>
+          {meshNativeOk &&
+          !meshConnectedId &&
+          (meshBleState === 'Unauthorized' || meshBleState === 'PoweredOff') ? (
+            <Pressable
+              onPress={() => {
+                void Linking.openSettings();
+              }}
+              style={{ marginTop: 10, alignSelf: 'flex-start' }}
+            >
+              <Text style={{ color: '#d4a574', fontSize: 13 }}>
+                Open system settings (Bluetooth / app permissions)
+              </Text>
+            </Pressable>
+          ) : null}
+          {meshInboundLast ? (
+            <Text
+              style={[
+                styles.meshImportLine,
+                { color: meshInboundLast.ok ? '#86efac' : '#f87171' },
+              ]}
+            >
+              {meshInboundLast.ok
+                ? `Last mesh import ${new Date(meshInboundLast.at).toLocaleString()}: +${meshInboundLast.membersInserted} members, +${meshInboundLast.checkInsInserted} check-ins`
+                : `Last mesh import ${new Date(meshInboundLast.at).toLocaleString()}: ${meshInboundLast.reason}${meshInboundLast.detail ? ` — ${meshInboundLast.detail}` : ''}`}
+            </Text>
+          ) : null}
+          {mode === 'crisis' &&
+          isOnboarded &&
+          currentCommunityId &&
+          currentCommunityId !== '__none__' ? (
+            <View style={styles.meshCrisisActions}>
+              <Text style={[styles.meshLabel, { color: '#fca5a5' }]}>
+                Same LoRa channel + EMBER passphrase as peers. This is not cell service. Use
+                broadcast when the radio is connected (Config if you need to pair).
+              </Text>
+              {!cryptoReady ? (
+                <Text style={[styles.meshLabel, { color: '#fbbf24' }]}>
+                  Unlock encryption to broadcast or merge mesh snapshots.
+                </Text>
+              ) : null}
+              <Pressable
+                style={[
+                  styles.meshCrisisButton,
+                  (!meshBroadcastAllowed || meshBroadcastBusy) &&
+                    styles.meshCrisisButtonDisabled,
+                ]}
+                disabled={!meshBroadcastAllowed || meshBroadcastBusy}
+                onPress={() => {
+                  void meshBroadcastSnapshot();
+                }}
+              >
+                <Text style={styles.meshCrisisButtonText}>
+                  {meshBroadcastBusy
+                    ? 'Broadcasting snapshot…'
+                    : 'Broadcast encrypted snapshot over mesh'}
+                </Text>
+              </Pressable>
+            </View>
+          ) : null}
+          <Pressable
+            style={styles.meshConfigLink}
+            onPress={() => {
+              router.push('/(tabs)/settings');
+            }}
+          >
+            <Text style={styles.meshConfigLinkText}>
+              {mode === 'crisis'
+                ? 'Pair radio & mesh tools → Config'
+                : 'Mesh & Bluetooth → Config'}
+            </Text>
+          </Pressable>
         </View>
 
         {/* Readiness Rings */}

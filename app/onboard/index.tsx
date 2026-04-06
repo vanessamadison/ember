@@ -159,6 +159,17 @@ export default function OnboardWelcomeScreen() {
               the correct passphrase.
             </Text>
           </View>
+
+          <View style={[styles.cardSection, { marginTop: 16 }]}>
+            <Text style={styles.cardTitle}>LoRa mesh radios (Tier 2)</Text>
+            <Text style={styles.cardText}>
+              Pairing Meshtastic-style hardware uses Bluetooth in a native dev
+              or store build (not Expo Go). After you finish onboarding, open
+              Settings → Mesh Network, grant Bluetooth / Nearby devices when
+              asked, then scan for your radio. Cellular service and mesh radio
+              are different links — both are shown honestly in the app.
+            </Text>
+          </View>
         </View>
       </ScrollView>
     </SafeAreaView>
