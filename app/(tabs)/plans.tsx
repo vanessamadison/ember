@@ -8,7 +8,7 @@ import {
   Pressable,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { PlanCard, SectionHeader } from '../../src/components';
+import { PlanCard } from '../../src/components';
 import { useApp } from '../../src/context/AppContext';
 import { useCommunity } from '../../src/context/CommunityContext';
 import { getTheme } from '../../src/theme';
@@ -141,9 +141,16 @@ export default function PlansScreen() {
                   onPress={() => handleTogglePlan(plan.id)}
                 >
                   <PlanCard
-                    plan={plan}
-                    isExpanded={expandedPlanId === plan.id}
-                    theme={theme}
+                    plan={{
+                      id: plan.id,
+                      name: plan.name,
+                      type: 'communication',
+                      size: `${plan.actions.length} steps`,
+                      status: 'current',
+                      description: plan.description,
+                    }}
+                    expanded={expandedPlanId === plan.id}
+                    accent={theme.accent}
                   />
                 </Pressable>
               )}

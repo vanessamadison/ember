@@ -79,14 +79,14 @@ export function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-export type DebouncedFunction<TArgs extends unknown[], TReturn> = (
+export type DebouncedFunction<TArgs extends unknown[]> = (
   ...args: TArgs
 ) => void;
 
 export function debounce<TArgs extends unknown[], TReturn>(
   fn: (...args: TArgs) => TReturn,
   ms: number
-): DebouncedFunction<TArgs, TReturn> {
+): DebouncedFunction<TArgs> {
   let timeoutId: NodeJS.Timeout | null = null;
 
   return function debounced(...args: TArgs): void {

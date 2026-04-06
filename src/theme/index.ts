@@ -61,6 +61,8 @@ export interface Theme {
   typography: Typography;
   spacing: Spacing;
   borderRadius: BorderRadius;
+  /** Convenience alias for `colors.accent` (common in UI code). */
+  accent: string;
 }
 
 // Peace mode theme
@@ -213,6 +215,7 @@ export function getTheme(mode: AppMode): Theme {
     typography,
     spacing,
     borderRadius,
+    accent: colors.accent,
   };
 }
 

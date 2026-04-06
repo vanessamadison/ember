@@ -1,11 +1,25 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
+import { STATUS } from '../constants';
+import { useClock } from '../hooks/useClock';
+
+function formatCheckInAgo(timestamp: number, now: number): string {
+  const diffMs = now - timestamp;
+  const diffMins = Math.floor(diffMs / 60000);
+  const diffHours = Math.floor(diffMs / 3600000);
+  const diffDays = Math.floor(diffMs / 86400000);
+
+  if (diffMins < 60) return `${diffMins}m ago`;
+  if (diffHours < 24) return `${diffHours}h ago`;
+  if (diffDays < 7) return `${diffDays}d ago`;
+  return 'Never';
+}
 
 interface Member {
   id: string;
   name: string;
   role: string;
-  status: 'safe' | 'help' | 'unknown';
+  status: STATUS;
   lastCheckIn: number; // timestamp
   bio?: string;
   skills?: string[];
@@ -18,7 +32,7 @@ interface MemberCardProps {
   accent: string;
   expanded?: boolean;
   onPress?: () => void;
-  onCheckIn?: (memberId: string, status: 'safe' | 'help') => void;
+  onCheckIn?: (memberId: string, status: STATUS.SAFE | STATUS.HELP) => void;
 }
 
 const MemberCard: React.FC<MemberCardProps> = ({
@@ -28,6 +42,12 @@ const MemberCard: React.FC<MemberCardProps> = ({
   onPress,
   onCheckIn,
 }) => {
+  const now = useClock();
+  const lastCheckInLabel = useMemo(
+    () => formatCheckInAgo(member.lastCheckIn, now),
+    [member.lastCheckIn, now]
+  );
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'safe':
@@ -37,19 +57,6 @@ const MemberCard: React.FC<MemberCardProps> = ({
       default:
         return 'rgba(255, 255, 255, 0.3)';
     }
-  };
-
-  const getTimeSinceCheckIn = (timestamp: number) => {
-    const now = Date.now();
-    const diffMs = now - timestamp;
-    const diffMins = Math.floor(diffMs / 60000);
-    const diffHours = Math.floor(diffMs / 3600000);
-    const diffDays = Math.floor(diffMs / 86400000);
-
-    if (diffMins < 60) return `${diffMins}m ago`;
-    if (diffHours < 24) return `${diffHours}h ago`;
-    if (diffDays < 7) return `${diffDays}d ago`;
-    return 'Never';
   };
 
   const statusColor = getStatusColor(member.status);
@@ -76,7 +83,7 @@ const MemberCard: React.FC<MemberCardProps> = ({
             <Text style={styles.name}>{member.name}</Text>
             <Text style={styles.role}>{member.role}</Text>
             <Text style={styles.lastCheckIn}>
-              Checked in {getTimeSinceCheckIn(member.lastCheckIn)}
+              Checked in {lastCheckInLabel}
             </Text>
           </View>
         </View>
@@ -86,7 +93,7 @@ const MemberCard: React.FC<MemberCardProps> = ({
             style={[styles.statusDot, { backgroundColor: statusColor }]}
           />
           <Text style={styles.statusText}>
-            {member.status === 'unknown' ? 'Unknown' : member.status}
+            {member.status === STATUS.UNKNOWN ? 'Unknown' : member.status}
           </Text>
         </View>
       </View>
@@ -136,13 +143,13 @@ const MemberCard: React.FC<MemberCardProps> = ({
           <View style={styles.actions}>
             <Pressable
               style={[styles.actionButton, styles.safeButton]}
-              onPress={() => onCheckIn?.(member.id, 'safe')}
+              onPress={() => onCheckIn?.(member.id, STATUS.SAFE)}
             >
               <Text style={styles.actionButtonText}>Safe</Text>
             </Pressable>
             <Pressable
               style={[styles.actionButton, styles.helpButton]}
-              onPress={() => onCheckIn?.(member.id, 'help')}
+              onPress={() => onCheckIn?.(member.id, STATUS.HELP)}
             >
               <Text style={styles.actionButtonText}>Help</Text>
             </Pressable>

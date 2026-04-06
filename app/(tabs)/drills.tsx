@@ -5,7 +5,6 @@ import {
   StyleSheet,
   ScrollView,
   FlatList,
-  Pressable,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { DrillCard } from '../../src/components';
@@ -108,7 +107,7 @@ export default function DrillsScreen() {
   const theme = getTheme(mode);
 
   const completedCount = useMemo(() => {
-    return drills.filter((d) => d.completed).length;
+    return drills.filter((d) => d.completedAt.length > 0).length;
   }, [drills]);
 
   const progress =
@@ -166,7 +165,18 @@ export default function DrillsScreen() {
             keyExtractor={(item) => item.id}
             renderItem={({ item: drill }) => (
               <View style={styles.drillItem}>
-                <DrillCard drill={drill} theme={theme} />
+                <DrillCard
+                  drill={{
+                    id: drill.id,
+                    name: drill.name,
+                    description: drill.description,
+                    difficulty: drill.difficulty,
+                    timeMinutes: 20,
+                    xpReward: 50,
+                    completed: drill.completedAt.length > 0,
+                  }}
+                  accent={theme.accent}
+                />
               </View>
             )}
             contentContainerStyle={styles.drillsList}

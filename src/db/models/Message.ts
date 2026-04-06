@@ -12,7 +12,7 @@ export default class Message extends Model {
 
   static associations = {
     community: { type: 'belongs_to', key: 'community_id' },
-  };
+  } as const;
 
   @readonly @text('community_id') communityId!: string;
 

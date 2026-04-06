@@ -5,7 +5,7 @@ interface Drill {
   id: string;
   name: string;
   description: string;
-  difficulty: 'easy' | 'medium' | 'hard';
+  difficulty: 'easy' | 'medium' | 'hard' | 'med';
   timeMinutes: number;
   xpReward: number;
   completed?: boolean;
@@ -29,6 +29,7 @@ const DrillCard: React.FC<DrillCardProps> = ({
       case 'easy':
         return '#22C55E';
       case 'medium':
+      case 'med':
         return '#FBBF24';
       case 'hard':
         return '#EF4444';

@@ -4,7 +4,6 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  FlatList,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
@@ -12,6 +11,7 @@ import {
   StatCard,
   MessageBubble,
 } from '../../src/components';
+import { STATUS } from '../../src/constants';
 import { useApp } from '../../src/context/AppContext';
 import { useCommunity } from '../../src/context/CommunityContext';
 import { getTheme } from '../../src/theme';
@@ -181,10 +181,8 @@ export default function HomeScreen() {
     helpCount,
     unknownCount,
     criticalResources,
-    drillAverage,
     totalXP,
     readinessScore,
-    streakDays,
     messages,
     achievements,
   } = useCommunity();
@@ -196,12 +194,12 @@ export default function HomeScreen() {
   const supplyHealth = useMemo(() => {
     const totalResources = resources.length;
     if (totalResources === 0) return 100;
-    const healthyCount = resources.filter((r) => r.stock >= r.target).length;
+    const healthyCount = resources.filter((r) => r.quantity >= 5).length;
     return Math.round((healthyCount / totalResources) * 100);
   }, [resources]);
 
   const drillsCompleted = useMemo(() => {
-    return drills.filter((d) => d.completed).length;
+    return drills.filter((d) => d.completedAt.length > 0).length;
   }, [drills]);
 
   const level = Math.floor(totalXP / 1000) + 1;
@@ -330,11 +328,12 @@ export default function HomeScreen() {
                     style={[
                       styles.chipDot,
                       {
-                        backgroundColor: member.isSafe
-                          ? '#22c55e'
-                          : member.needsHelp
-                          ? '#ef4444'
-                          : '#f59e0b',
+                        backgroundColor:
+                          member.status === STATUS.SAFE
+                            ? '#22c55e'
+                            : member.status === STATUS.HELP
+                              ? '#ef4444'
+                              : '#f59e0b',
                       },
                     ]}
                   />
@@ -379,7 +378,7 @@ export default function HomeScreen() {
                     alignItems: 'center',
                   }}
                 >
-                  <Text style={{ fontSize: 18 }}>{achievement.icon}</Text>
+                  <Text style={{ fontSize: 18 }}>{achievement.icon ?? '🏅'}</Text>
                   <View style={{ flex: 1 }}>
                     <Text
                       style={{
@@ -389,7 +388,7 @@ export default function HomeScreen() {
                         marginBottom: 2,
                       }}
                     >
-                      {achievement.title}
+                      {achievement.title ?? 'Achievement'}
                     </Text>
                     <Text
                       style={{
@@ -397,7 +396,7 @@ export default function HomeScreen() {
                         color: '#808080',
                       }}
                     >
-                      {achievement.description}
+                      {achievement.description ?? ''}
                     </Text>
                   </View>
                 </View>
@@ -414,10 +413,14 @@ export default function HomeScreen() {
               {recentMessages.map((msg) => (
                 <MessageBubble
                   key={msg.id}
-                  message={msg.text}
-                  sender={msg.sender}
-                  timestamp={msg.timestamp}
-                  isSelf={msg.isSelf}
+                  message={{
+                    id: msg.id,
+                    sender: msg.senderName,
+                    text: msg.content,
+                    timestamp: msg.timestamp,
+                    type: msg.type,
+                  }}
+                  accent={theme.accent}
                 />
               ))}
             </View>

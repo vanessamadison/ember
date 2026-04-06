@@ -1,3 +1,12 @@
+import * as SecureStore from 'expo-secure-store';
+import { deriveKey } from './keyDerivation';
+import {
+  encrypt,
+  decrypt,
+  encryptObject,
+  decryptObject,
+} from './encryption';
+
 export {
   deriveKey,
   generateSalt,
@@ -11,15 +20,6 @@ export {
   encryptObject,
   decryptObject,
   generateNonce,
-} from './encryption';
-
-import * as SecureStore from 'expo-secure-store';
-import { deriveKey, hashPassphrase } from './keyDerivation';
-import {
-  encrypt,
-  decrypt,
-  encryptObject,
-  decryptObject,
 } from './encryption';
 
 const SECURE_KEY_STORAGE = 'ember_encryption_key';
@@ -53,13 +53,10 @@ export class CryptoManager {
       this.salt = generatedSalt;
       this.isReady = true;
 
-      // Store salt in SecureStore for later key derivation
-      if (!salt) {
-        await SecureStore.setItemAsync(
-          SECURE_SALT_STORAGE,
-          btoa(String.fromCharCode(...generatedSalt))
-        );
-      }
+      await SecureStore.setItemAsync(
+        SECURE_SALT_STORAGE,
+        btoa(String.fromCharCode(...generatedSalt))
+      );
     } catch (error) {
       this.destroy();
       throw new Error(`Failed to initialize CryptoManager: ${error}`);
@@ -124,6 +121,16 @@ export class CryptoManager {
       throw new Error('CryptoManager not initialized');
     }
     return decryptObject<T>(ciphertext, this.derivedKey);
+  }
+
+  /**
+   * Persists the current derived key to SecureStore (post-unlock / join).
+   */
+  async persistDerivedKeyToSecureStore(): Promise<void> {
+    if (!this.derivedKey) {
+      throw new Error('CryptoManager not initialized');
+    }
+    return this.storeEncryptedKey(this.derivedKey);
   }
 
   /**

@@ -1,11 +1,18 @@
 module.exports = function (api) {
+  // api.env must run before api.cache (Babel config API rule).
+  const isTest = api.env('test');
   api.cache(true);
+  // Unit tests (jest-expo) only need standard Expo transforms; WatermelonDB
+  // decorators and the Reanimated Babel plugin break Jest's transformer.
+  if (isTest) {
+    return {
+      presets: ['babel-preset-expo'],
+    };
+  }
   return {
     presets: ['babel-preset-expo'],
     plugins: [
-      // WatermelonDB decorator support — plugin is bundled inside the main package
       ['@nozbe/watermelondb/decorators'],
-      // Reanimated plugin must always be listed last
       'react-native-reanimated/plugin',
     ],
   };

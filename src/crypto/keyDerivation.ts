@@ -1,5 +1,4 @@
 import * as Crypto from 'expo-crypto';
-import * as SecureStore from 'expo-secure-store';
 
 /**
  * Derives a cryptographic key from a community passphrase using PBKDF2.
@@ -13,15 +12,7 @@ export async function deriveKey(
 ): Promise<{ key: Uint8Array; salt: Uint8Array }> {
   const saltToUse = salt || generateSalt();
 
-  // Convert passphrase to Uint8Array
-  const passphraseArray = new TextEncoder().encode(passphrase);
-
-  // Use PBKDF2 with SHA-256, 100,000 iterations to derive a 256-bit (32-byte) key
-  const key = await Crypto.digestStringAsync(
-    Crypto.CryptoDigestAlgorithm.SHA256,
-    passphrase + btoa(String.fromCharCode(...saltToUse)),
-    { format: Crypto.CryptoEncoding.HEX }
-  );
+  const hexEncoding = { encoding: Crypto.CryptoEncoding.HEX };
 
   // For PBKDF2 proper implementation, we need a more robust approach
   // Since expo-crypto doesn't directly expose PBKDF2, we'll use a SHA-256 based KDF
@@ -30,7 +21,7 @@ export async function deriveKey(
   let hash = await Crypto.digestStringAsync(
     Crypto.CryptoDigestAlgorithm.SHA256,
     passphrase + btoa(String.fromCharCode(...saltToUse)),
-    { format: Crypto.CryptoEncoding.HEX }
+    hexEncoding
   );
 
   // Convert hex string to Uint8Array
@@ -48,7 +39,7 @@ export async function deriveKey(
     const nextHash = await Crypto.digestStringAsync(
       Crypto.CryptoDigestAlgorithm.SHA256,
       btoa(String.fromCharCode(...combined)),
-      { format: Crypto.CryptoEncoding.HEX }
+      hexEncoding
     );
 
     for (let j = 0; j < 32; j++) {
@@ -103,6 +94,6 @@ export async function hashPassphrase(passphrase: string): Promise<string> {
   return await Crypto.digestStringAsync(
     Crypto.CryptoDigestAlgorithm.SHA256,
     passphrase,
-    { format: Crypto.CryptoEncoding.HEX }
+    { encoding: Crypto.CryptoEncoding.HEX }
   );
 }

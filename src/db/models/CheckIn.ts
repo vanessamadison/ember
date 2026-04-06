@@ -12,7 +12,7 @@ export default class CheckIn extends Model {
 
   static associations = {
     member: { type: 'belongs_to', key: 'member_id' },
-  };
+  } as const;
 
   @readonly @text('member_id') memberId!: string;
 
@@ -25,6 +25,8 @@ export default class CheckIn extends Model {
   @text('location_encrypted') locationEncrypted!: string;
 
   @text('note') note!: string;
+
+  @text('sync_id') syncId?: string;
 
   @readonly @date('timestamp') timestampDate!: Date;
 

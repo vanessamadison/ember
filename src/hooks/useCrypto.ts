@@ -56,7 +56,7 @@ class MockCryptoManager implements CryptoManager {
         throw new Error('Invalid decryption key');
       }
       return dataParts.join(':');
-    } catch (err) {
+    } catch {
       throw new Error('Decryption failed');
     }
   }

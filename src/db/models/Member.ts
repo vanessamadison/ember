@@ -25,7 +25,7 @@ export default class Member extends Model {
     community: { type: 'belongs_to', key: 'community_id' },
     check_ins: { type: 'has_many', foreignKey: 'member_id' },
     achievements: { type: 'has_many', foreignKey: 'member_id' },
-  };
+  } as const;
 
   @text('name') name!: string;
 
@@ -44,6 +44,10 @@ export default class Member extends Model {
   @text('resources_json') resourcesJson!: string;
 
   @field('is_self') isSelf!: boolean;
+
+  @text('public_id') publicId?: string;
+
+  @field('removed_at') removedAt?: number;
 
   @readonly @text('community_id') communityId!: string;
 

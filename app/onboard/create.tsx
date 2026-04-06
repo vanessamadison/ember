@@ -1,5 +1,5 @@
-import { router } from 'expo-router';
-import React, { useState, useMemo } from 'react';
+import { router, useLocalSearchParams } from 'expo-router';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -7,8 +7,12 @@ import {
   StyleSheet,
   ScrollView,
   TextInput,
+  Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { createCommunityInDb } from '../../src/db/communityLifecycle';
+import { generateInviteCode } from '../../src/crypto/keyDerivation';
 import { useApp } from '../../src/context/AppContext';
 
 const styles = StyleSheet.create({
@@ -102,32 +106,62 @@ const styles = StyleSheet.create({
   },
 });
 
-function generateInviteCode(): string {
-  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-  let code = 'EMBR';
-  for (let i = 0; i < 8; i++) {
-    if (i === 4) code += '-';
-    code += chars.charAt(Math.floor(Math.random() * chars.length));
-  }
-  return code;
-}
-
 export default function CreateCommunityScreen() {
-  const { setOnboarded } = useApp();
+  const { displayName: displayNameParam } = useLocalSearchParams<{
+    displayName?: string;
+  }>();
+  const displayName =
+    typeof displayNameParam === 'string' ? displayNameParam.trim() : '';
+
+  const {
+    setOnboarded,
+    setCommunity,
+    setUser,
+    setUserDisplayName,
+  } = useApp();
   const [communityName, setCommunityName] = useState('');
   const [passphrase, setPassphrase] = useState('');
+  const [busy, setBusy] = useState(false);
   const inviteCode = useMemo(() => generateInviteCode(), []);
 
-  const handleCreate = () => {
-    if (communityName.trim() && passphrase.trim()) {
+  useEffect(() => {
+    if (!displayName) {
+      router.replace('/onboard');
+    }
+  }, [displayName]);
+
+  const handleCreate = async () => {
+    if (!communityName.trim() || !passphrase.trim() || !displayName || busy) {
+      return;
+    }
+    setBusy(true);
+    try {
+      const { communityId, memberId } = await createCommunityInDb({
+        communityName: communityName.trim(),
+        passphrase: passphrase.trim(),
+        inviteCode,
+        displayName,
+      });
+      setUserDisplayName(displayName);
+      setUser(memberId);
+      setCommunity(communityId);
       setOnboarded(true);
       router.replace('/(tabs)');
+    } catch (e) {
+      const message = e instanceof Error ? e.message : 'Could not create community.';
+      Alert.alert('Create failed', message);
+    } finally {
+      setBusy(false);
     }
   };
 
   const handleBack = () => {
     router.back();
   };
+
+  if (!displayName) {
+    return null;
+  }
 
   return (
     <SafeAreaView style={styles.container}>
@@ -180,12 +214,21 @@ export default function CreateCommunityScreen() {
           </View>
 
           <Pressable
-            style={styles.button}
-            onPress={handleCreate}
-            disabled={!communityName.trim() || !passphrase.trim()}
-            opacity={!communityName.trim() || !passphrase.trim() ? 0.5 : 1}
+            style={[
+              styles.button,
+              {
+                opacity:
+                  !communityName.trim() || !passphrase.trim() || busy ? 0.5 : 1,
+              },
+            ]}
+            onPress={() => void handleCreate()}
+            disabled={!communityName.trim() || !passphrase.trim() || busy}
           >
-            <Text style={styles.buttonText}>Create & Enter</Text>
+            {busy ? (
+              <ActivityIndicator color="#000000" />
+            ) : (
+              <Text style={styles.buttonText}>Create & Enter</Text>
+            )}
           </Pressable>
         </View>
       </ScrollView>

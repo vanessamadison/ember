@@ -1,12 +1,11 @@
 import { router } from 'expo-router';
-import React from 'react';
+import React, { useEffect } from 'react';
 import {
   View,
   Text,
   Pressable,
   StyleSheet,
   ScrollView,
-  Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { EmberLogo } from '../src/components';
@@ -105,7 +104,13 @@ const styles = StyleSheet.create({
 });
 
 export default function SplashScreen() {
-  const { setMode } = useApp();
+  const { setMode, isOnboarded, currentCommunityId } = useApp();
+
+  useEffect(() => {
+    if (isOnboarded && currentCommunityId) {
+      router.replace('/(tabs)');
+    }
+  }, [isOnboarded, currentCommunityId]);
 
   const handleGetStarted = () => {
     router.push('/onboard');

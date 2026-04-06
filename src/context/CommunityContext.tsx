@@ -1,71 +1,36 @@
-import React, { createContext, useContext, useMemo } from 'react';
-import { create } from 'zustand';
+import React, {
+  createContext,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+} from 'react';
+import { createStore } from 'zustand/vanilla';
+import { useStore } from 'zustand/react';
 import { STATUS } from '../constants';
+import type {
+  Member,
+  Resource,
+  Message,
+  CommunityState,
+} from '../domain/community';
+import {
+  loadCommunityStateFromDb,
+  persistMemberCheckIn,
+  persistResourceQuantity,
+} from '../db/communityLifecycle';
+import { subscribeCommunityDataRefresh } from '../sync/refreshHub';
+import { useApp } from './AppContext';
 
-export interface Member {
-  id: string;
-  name: string;
-  status: STATUS;
-  lastCheckIn: number; // timestamp
-  xp: number;
-  level: number;
-}
-
-export interface Resource {
-  id: string;
-  category: string;
-  name: string;
-  quantity: number;
-  unit: string;
-  lastUpdated: number; // timestamp
-  owner?: string;
-}
-
-export interface Drill {
-  id: string;
-  name: string;
-  description: string;
-  difficulty: 'easy' | 'med' | 'hard';
-  completedAt: number[]; // array of timestamps
-  participantCount: number;
-}
-
-export interface Plan {
-  id: string;
-  name: string;
-  description: string;
-  actions: string[];
-  createdAt: number;
-  updatedAt: number;
-}
-
-export interface Message {
-  id: string;
-  senderId: string;
-  senderName: string;
-  content: string;
-  timestamp: number;
-  type: 'text' | 'alert' | 'resource' | 'drill';
-}
-
-export interface Achievement {
-  id: string;
-  achievedAt: number;
-  awardedTo: string;
-}
-
-export interface CommunityState {
-  communityId: string;
-  communityName: string;
-  members: Member[];
-  resources: Resource[];
-  drills: Drill[];
-  plans: Plan[];
-  messages: Message[];
-  achievements: Achievement[];
-  readinessScore: number;
-  streakDays: number;
-}
+export type {
+  Member,
+  Resource,
+  Drill,
+  Plan,
+  Message,
+  Achievement,
+  CommunityState,
+} from '../domain/community';
 
 interface CommunityComputedValues {
   safeCount: number;
@@ -78,6 +43,7 @@ interface CommunityComputedValues {
 }
 
 interface CommunityStore extends CommunityState {
+  hydrate: (data: Partial<CommunityState>) => void;
   checkIn: (memberId: string, status: STATUS) => void;
   updateResource: (
     resourceId: string,
@@ -98,6 +64,7 @@ interface CommunityStore extends CommunityState {
 const createInitialState = (communityId: string): CommunityState => ({
   communityId,
   communityName: 'Community',
+  inviteExpiresAt: null,
   members: [],
   resources: [],
   drills: [],
@@ -108,13 +75,35 @@ const createInitialState = (communityId: string): CommunityState => ({
   streakDays: 0,
 });
 
-const createCommunityStore = (communityId: string) =>
-  create<CommunityStore>((set) => {
+const createCommunityStore = (communityId: string) => {
+  const shouldPersist =
+    communityId !== '__none__' && communityId !== 'local';
+
+  return createStore<CommunityStore>((set, get) => {
     const initialState = createInitialState(communityId);
 
     return {
       ...initialState,
-      checkIn: (memberId: string, status: STATUS) =>
+      hydrate: (data: Partial<CommunityState>) =>
+        set((state) => ({
+          ...state,
+          ...data,
+          communityId: data.communityId ?? state.communityId,
+          communityName: data.communityName ?? state.communityName,
+          inviteExpiresAt:
+            data.inviteExpiresAt !== undefined
+              ? data.inviteExpiresAt
+              : state.inviteExpiresAt,
+          members: data.members ?? state.members,
+          resources: data.resources ?? state.resources,
+          drills: data.drills ?? state.drills,
+          plans: data.plans ?? state.plans,
+          messages: data.messages ?? state.messages,
+          achievements: data.achievements ?? state.achievements,
+          readinessScore: data.readinessScore ?? state.readinessScore,
+          streakDays: data.streakDays ?? state.streakDays,
+        })),
+      checkIn: (memberId: string, status: STATUS) => {
         set((state) => ({
           members: state.members.map((m) =>
             m.id === memberId
@@ -125,8 +114,14 @@ const createCommunityStore = (communityId: string) =>
                 }
               : m
           ),
-        })),
-      updateResource: (resourceId: string, quantity: number, unit?: string) =>
+        }));
+        if (shouldPersist) {
+          void persistMemberCheckIn(memberId, status).catch((err) =>
+            console.error('[ember] persistMemberCheckIn', err)
+          );
+        }
+      },
+      updateResource: (resourceId: string, quantity: number, unit?: string) => {
         set((state) => ({
           resources: state.resources.map((r) =>
             r.id === resourceId
@@ -138,7 +133,13 @@ const createCommunityStore = (communityId: string) =>
                 }
               : r
           ),
-        })),
+        }));
+        if (shouldPersist) {
+          void persistResourceQuantity(resourceId, quantity, unit).catch(
+            (err) => console.error('[ember] persistResourceQuantity', err)
+          );
+        }
+      },
       addMessage: (message: Omit<Message, 'id'>) =>
         set((state) => ({
           messages: [
@@ -186,11 +187,14 @@ const createCommunityStore = (communityId: string) =>
       updateReadinessScore: (score: number) =>
         set({ readinessScore: Math.min(100, Math.max(0, score)) }),
       updateStreakDays: (days: number) => set({ streakDays: days }),
-      reset: () => set(initialState),
+      reset: () => set(createInitialState(get().communityId)),
     };
   });
+};
 
-interface CommunityContextValue {
+interface CommunityContextValue
+  extends CommunityState,
+    CommunityComputedValues {
   state: CommunityState;
   computed: CommunityComputedValues;
   checkIn: (memberId: string, status: STATUS) => void;
@@ -214,30 +218,77 @@ const CommunityContext = createContext<CommunityContextValue | undefined>(
 );
 
 interface CommunityProviderProps {
-  communityId: string;
+  communityId?: string;
   children: React.ReactNode;
 }
 
 export const CommunityProvider: React.FC<CommunityProviderProps> = ({
-  communityId,
+  communityId = '__none__',
   children,
 }) => {
-  const storeRef = React.useRef(
-    createCommunityStore(communityId)
+  const store = useMemo(
+    () => createCommunityStore(communityId),
+    [communityId]
   );
+  const snap = useStore(store);
+  const loadTokenRef = useRef(0);
 
-  const state = storeRef.current((s) => ({
-    communityId: s.communityId,
-    communityName: s.communityName,
-    members: s.members,
-    resources: s.resources,
-    drills: s.drills,
-    plans: s.plans,
-    messages: s.messages,
-    achievements: s.achievements,
-    readinessScore: s.readinessScore,
-    streakDays: s.streakDays,
-  }));
+  useEffect(() => {
+    if (!communityId || communityId === '__none__' || communityId === 'local') {
+      return;
+    }
+    const token = ++loadTokenRef.current;
+    let cancelled = false;
+
+    void loadCommunityStateFromDb(communityId).then((data) => {
+      if (cancelled || token !== loadTokenRef.current || !data) return;
+      store.getState().hydrate(data);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [communityId, store]);
+
+  useEffect(() => {
+    return subscribeCommunityDataRefresh(() => {
+      if (!communityId || communityId === '__none__' || communityId === 'local') {
+        return;
+      }
+      void loadCommunityStateFromDb(communityId).then((data) => {
+        if (data) store.getState().hydrate(data);
+      });
+    });
+  }, [communityId, store]);
+
+  const state: CommunityState = useMemo(
+    () => ({
+      communityId: snap.communityId,
+      communityName: snap.communityName,
+      inviteExpiresAt: snap.inviteExpiresAt,
+      members: snap.members,
+      resources: snap.resources,
+      drills: snap.drills,
+      plans: snap.plans,
+      messages: snap.messages,
+      achievements: snap.achievements,
+      readinessScore: snap.readinessScore,
+      streakDays: snap.streakDays,
+    }),
+    [
+      snap.communityId,
+      snap.communityName,
+      snap.inviteExpiresAt,
+      snap.members,
+      snap.resources,
+      snap.drills,
+      snap.plans,
+      snap.messages,
+      snap.achievements,
+      snap.readinessScore,
+      snap.streakDays,
+    ]
+  );
 
   const computed = useMemo<CommunityComputedValues>(() => {
     const safeCount = state.members.filter((m) => m.status === STATUS.SAFE)
@@ -248,7 +299,10 @@ export const CommunityProvider: React.FC<CommunityProviderProps> = ({
       (m) => m.status === STATUS.UNKNOWN
     ).length;
 
-    const criticalResources = state.resources.filter((r) => r.quantity < 5);
+    const criticalResources = state.resources.filter((r) => {
+      const t = r.criticalThreshold ?? 5;
+      return r.quantity <= t;
+    });
 
     const drillAverage =
       state.drills.length > 0
@@ -258,7 +312,10 @@ export const CommunityProvider: React.FC<CommunityProviderProps> = ({
 
     const resHealth =
       state.resources.length > 0
-        ? (state.resources.filter((r) => r.quantity >= 5).length /
+        ? (state.resources.filter((r) => {
+            const t = r.criticalThreshold ?? 5;
+            return r.quantity > t;
+          }).length /
             state.resources.length) *
           100
         : 0;
@@ -276,18 +333,23 @@ export const CommunityProvider: React.FC<CommunityProviderProps> = ({
     };
   }, [state]);
 
-  const value: CommunityContextValue = {
-    state,
-    computed,
-    checkIn: storeRef.current((s) => s.checkIn),
-    updateResource: storeRef.current((s) => s.updateResource),
-    addMessage: storeRef.current((s) => s.addMessage),
-    completeDrill: storeRef.current((s) => s.completeDrill),
-    addMember: storeRef.current((s) => s.addMember),
-    addResource: storeRef.current((s) => s.addResource),
-    updateReadinessScore: storeRef.current((s) => s.updateReadinessScore),
-    updateStreakDays: storeRef.current((s) => s.updateStreakDays),
-  };
+  const value: CommunityContextValue = useMemo(
+    () => ({
+      state,
+      computed,
+      ...state,
+      ...computed,
+      checkIn: snap.checkIn,
+      updateResource: snap.updateResource,
+      addMessage: snap.addMessage,
+      completeDrill: snap.completeDrill,
+      addMember: snap.addMember,
+      addResource: snap.addResource,
+      updateReadinessScore: snap.updateReadinessScore,
+      updateStreakDays: snap.updateStreakDays,
+    }),
+    [state, computed, snap]
+  );
 
   return (
     <CommunityContext.Provider value={value}>
@@ -295,6 +357,22 @@ export const CommunityProvider: React.FC<CommunityProviderProps> = ({
     </CommunityContext.Provider>
   );
 };
+
+export function RootCommunityProvider({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  const { isOnboarded, currentCommunityId } = useApp();
+  const id =
+    isOnboarded && currentCommunityId ? currentCommunityId : '__none__';
+
+  return (
+    <CommunityProvider key={id} communityId={id}>
+      {children}
+    </CommunityProvider>
+  );
+}
 
 export function useCommunity(): CommunityContextValue {
   const context = useContext(CommunityContext);

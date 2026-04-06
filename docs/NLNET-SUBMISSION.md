@@ -126,5 +126,8 @@ Promotion: Conference presentations (FOSDEM, CCC, Meshtastic community events), 
 
 ---
 
+### GenAI Disclosure
+> Claude (Anthropic, Opus 4.6) was used as a development assistant for code generation, documentation, and proposal drafting. All architectural decisions, security design, and project direction are human-led. AI-assisted git commits are tagged with Co-Authored-By. Full prompt provenance log: docs/GENAI-PROMPT-LOG.md in the repository.
+
 ### Attachments
-> Upload: EMBER-Technical-Overview.pdf (being created now)
+> Upload: EMBER-Technical-Overview.pdf and GENAI-PROMPT-LOG.md

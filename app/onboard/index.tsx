@@ -94,13 +94,19 @@ export default function OnboardWelcomeScreen() {
 
   const handleCreateCommunity = () => {
     if (name.trim()) {
-      router.push('/onboard/create');
+      router.push({
+        pathname: '/onboard/create',
+        params: { displayName: name.trim() },
+      });
     }
   };
 
   const handleJoinCommunity = () => {
     if (name.trim()) {
-      router.push('/onboard/join');
+      router.push({
+        pathname: '/onboard/join',
+        params: { displayName: name.trim() },
+      });
     }
   };
 
@@ -128,19 +134,17 @@ export default function OnboardWelcomeScreen() {
 
           <View style={styles.buttonSection}>
             <Pressable
-              style={styles.button}
+              style={[styles.button, { opacity: !name.trim() ? 0.5 : 1 }]}
               onPress={handleCreateCommunity}
               disabled={!name.trim()}
-              opacity={!name.trim() ? 0.5 : 1}
             >
               <Text style={styles.buttonText}>Create a Community</Text>
             </Pressable>
 
             <Pressable
-              style={styles.button}
+              style={[styles.button, { opacity: !name.trim() ? 0.5 : 1 }]}
               onPress={handleJoinCommunity}
               disabled={!name.trim()}
-              opacity={!name.trim() ? 0.5 : 1}
             >
               <Text style={styles.buttonText}>Join a Community</Text>
             </Pressable>

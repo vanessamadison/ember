@@ -11,7 +11,7 @@ export default class EmergencyPlan extends Model {
 
   static associations = {
     community: { type: 'belongs_to', key: 'community_id' },
-  };
+  } as const;
 
   @readonly @text('community_id') communityId!: string;
 

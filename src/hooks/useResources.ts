@@ -36,61 +36,63 @@ export function useResources(communityId: string): UseResourcesResult {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
 
-  // Mock data for initialization
-  const mockResources: Resource[] = [
-    {
-      id: 'res_1',
-      communityId,
-      category: RESOURCE_CATEGORY.WATER,
-      name: 'Bottled Water',
-      quantity: 24,
-      unit: 'bottles',
-      lastUpdated: Date.now() - 3600000,
-      owner: 'member_1',
-    },
-    {
-      id: 'res_2',
-      communityId,
-      category: RESOURCE_CATEGORY.FOOD,
-      name: 'Canned Food',
-      quantity: 3,
-      unit: 'cases',
-      lastUpdated: Date.now() - 7200000,
-      owner: 'member_2',
-      critical: true,
-    },
-    {
-      id: 'res_3',
-      communityId,
-      category: RESOURCE_CATEGORY.MEDICAL,
-      name: 'First Aid Kits',
-      quantity: 8,
-      unit: 'kits',
-      lastUpdated: Date.now() - 1800000,
-      owner: 'member_1',
-    },
-    {
-      id: 'res_4',
-      communityId,
-      category: RESOURCE_CATEGORY.POWER,
-      name: 'Battery Packs',
-      quantity: 2,
-      unit: 'packs',
-      lastUpdated: Date.now() - 86400000,
-      owner: 'member_3',
-      critical: true,
-    },
-    {
-      id: 'res_5',
-      communityId,
-      category: RESOURCE_CATEGORY.COMMS,
-      name: 'Radios',
-      quantity: 6,
-      unit: 'units',
-      lastUpdated: Date.now() - 172800000,
-      owner: 'member_2',
-    },
-  ];
+  const mockResources = useMemo((): Resource[] => {
+    const t = Date.now();
+    return [
+      {
+        id: 'res_1',
+        communityId,
+        category: RESOURCE_CATEGORY.WATER,
+        name: 'Bottled Water',
+        quantity: 24,
+        unit: 'bottles',
+        lastUpdated: t - 3600000,
+        owner: 'member_1',
+      },
+      {
+        id: 'res_2',
+        communityId,
+        category: RESOURCE_CATEGORY.FOOD,
+        name: 'Canned Food',
+        quantity: 3,
+        unit: 'cases',
+        lastUpdated: t - 7200000,
+        owner: 'member_2',
+        critical: true,
+      },
+      {
+        id: 'res_3',
+        communityId,
+        category: RESOURCE_CATEGORY.MEDICAL,
+        name: 'First Aid Kits',
+        quantity: 8,
+        unit: 'kits',
+        lastUpdated: t - 1800000,
+        owner: 'member_1',
+      },
+      {
+        id: 'res_4',
+        communityId,
+        category: RESOURCE_CATEGORY.POWER,
+        name: 'Battery Packs',
+        quantity: 2,
+        unit: 'packs',
+        lastUpdated: t - 86400000,
+        owner: 'member_3',
+        critical: true,
+      },
+      {
+        id: 'res_5',
+        communityId,
+        category: RESOURCE_CATEGORY.COMMS,
+        name: 'Radios',
+        quantity: 6,
+        unit: 'units',
+        lastUpdated: t - 172800000,
+        owner: 'member_2',
+      },
+    ];
+  }, [communityId]);
 
   useEffect(() => {
     const loadResources = async () => {
@@ -110,7 +112,7 @@ export function useResources(communityId: string): UseResourcesResult {
     };
 
     loadResources();
-  }, [communityId]);
+  }, [communityId, mockResources]);
 
   const updateQuantity = useCallback(
     async (resourceId: string, quantity: number): Promise<void> => {

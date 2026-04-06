@@ -1,11 +1,7 @@
-import { useMemo, useCallback } from 'react';
-import {
-  Database,
-  Collection,
-  Query,
-  Clause,
-  QueryAssociation,
-} from '@nozbe/watermelondb';
+import React, { useMemo } from 'react';
+import type { Clause } from '@nozbe/watermelondb/QueryDescription';
+import type { Model } from '@nozbe/watermelondb';
+import { Database, Collection, Query } from '@nozbe/watermelondb';
 import { Subscription } from 'rxjs';
 
 // Global database instance (would be initialized in app root)
@@ -34,15 +30,17 @@ export function useDatabase(): Database {
   }, []);
 }
 
-export function useCollection<T>(tableName: string): Collection<T> {
+export function useCollection<T extends Model>(
+  tableName: string
+): Collection<T> {
   const database = useDatabase();
 
   return useMemo(() => {
-    return database.get(tableName) as Collection<T>;
+    return database.get<T>(tableName);
   }, [database, tableName]);
 }
 
-export function useQuery<T>(
+export function useQuery<T extends Model>(
   collection: Collection<T>,
   clauses?: Clause | Clause[],
   options: UseQueryOptions = {}
@@ -75,10 +73,10 @@ export function useQuery<T>(
     };
   }, [collection, clauses, options.observeChanges]);
 
-  return [records, subscriptionRef.current];
+  return [records, null];
 }
 
-export function useQueryObserve<T>(
+export function useQueryObserve<T extends Model>(
   collection: Collection<T>,
   clauses?: Clause | Clause[]
 ): T[] {
@@ -103,5 +101,3 @@ export function useQueryObserve<T>(
 
   return records;
 }
-
-import React;

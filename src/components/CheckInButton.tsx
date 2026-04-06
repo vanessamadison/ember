@@ -24,12 +24,14 @@ const CheckInButton: React.FC<CheckInButtonProps> = ({
   isPulsing = false,
   accent,
 }) => {
-  const scale = useSharedValue(1);
+  const pulseScale = useSharedValue(1);
+  const pressScale = useSharedValue(1);
   const bgOpacity = useSharedValue(1);
 
+  /* eslint-disable react-hooks/exhaustive-deps -- Reanimated shared values are stable refs; do not list as deps (see react-hooks/immutability with pressScale). */
   useEffect(() => {
     if (isPulsing) {
-      scale.value = withRepeat(
+      pulseScale.value = withRepeat(
         withTiming(1.05, {
           duration: 1000,
           easing: Easing.bezier(0.33, 0.66, 0.66, 1),
@@ -47,20 +49,21 @@ const CheckInButton: React.FC<CheckInButtonProps> = ({
         true
       );
     } else {
-      scale.value = 1;
+      pulseScale.value = 1;
       bgOpacity.value = 1;
     }
-  }, [isPulsing, scale, bgOpacity]);
+  }, [isPulsing]);
+  /* eslint-enable react-hooks/exhaustive-deps */
 
   const animatedStyle = useAnimatedStyle(() => {
     return {
-      transform: [{ scale: scale.value }],
+      transform: [{ scale: pulseScale.value * pressScale.value }],
     };
   });
 
   const handlePress = () => {
-    scale.value = withTiming(0.95, { duration: 100 }, () => {
-      scale.value = withTiming(1.1, { duration: 200 }, () => {
+    pressScale.value = withTiming(0.95, { duration: 100 }, () => {
+      pressScale.value = withTiming(1.1, { duration: 200 }, () => {
         runOnJS(onCheckIn)();
       });
     });

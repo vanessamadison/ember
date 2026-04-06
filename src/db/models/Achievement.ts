@@ -11,7 +11,7 @@ export default class Achievement extends Model {
 
   static associations = {
     member: { type: 'belongs_to', key: 'member_id' },
-  };
+  } as const;
 
   @readonly @text('member_id') memberId!: string;
 

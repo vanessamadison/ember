@@ -1,15 +1,43 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
   Pressable,
+  Alert,
+  TextInput,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import * as Clipboard from 'expo-clipboard';
 import { EmberLogo } from '../../src/components';
 import { useApp } from '../../src/context/AppContext';
-import { getTheme } from '../../src/theme';
+import { useCommunity } from '../../src/context/CommunityContext';
+import { getCryptoSession } from '../../src/crypto/session';
+import {
+  exportMembersCheckInsSneakerBase64,
+  importMembersCheckInsSneakerBase64,
+  syncMembersCheckInsViaRelay,
+  getRelayBaseUrl,
+} from '../../src/sync';
+import { renewCommunityInviteWindow } from '../../src/db/communityLifecycle';
+import {
+  MeshtasticBleBridge,
+  type BlePoweredState,
+  type DiscoveredRadio,
+} from '../../src/mesh/meshtasticBleBridge';
+import { digestFromRadioMessages } from '../../src/mesh/fromRadioSummary';
+import { MeshtasticSession } from '../../src/mesh/meshtasticSession';
+import type { FromRadioMessage } from '../../src/mesh/meshtasticCodec';
+
+const MESH_LOG_MAX_LINES = 14;
+
+function trimMeshLog(text: string, maxLines = MESH_LOG_MAX_LINES): string {
+  const lines = text.split('\n');
+  if (lines.length <= maxLines) return text;
+  return lines.slice(-maxLines).join('\n');
+}
 
 const styles = StyleSheet.create({
   container: {
@@ -179,31 +207,213 @@ const styles = StyleSheet.create({
     color: '#808080',
     marginBottom: 4,
   },
+  syncHelp: {
+    fontSize: 11,
+    color: '#808080',
+    lineHeight: 16,
+    marginBottom: 8,
+  },
+  syncInput: {
+    backgroundColor: '#0f0f0f',
+    borderWidth: 1,
+    borderColor: '#333333',
+    borderRadius: 8,
+    color: '#e5e5e5',
+    fontSize: 11,
+    fontFamily: 'Courier New',
+    minHeight: 72,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    textAlignVertical: 'top',
+  },
+  syncButton: {
+    backgroundColor: '#2a2a2a',
+    paddingVertical: 10,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  syncButtonPrimary: {
+    backgroundColor: '#d4a574',
+  },
+  syncButtonText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#e5e5e5',
+  },
+  syncButtonTextDark: {
+    color: '#000000',
+  },
+  meshDeviceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 10,
+    borderTopWidth: 1,
+    borderTopColor: '#2a2a2a',
+  },
+  meshDeviceTitle: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#e5e5e5',
+  },
+  meshDeviceMeta: {
+    fontSize: 11,
+    color: '#808080',
+    marginTop: 2,
+  },
+  meshBadge: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#d4a574',
+  },
+  meshProtoLog: {
+    fontSize: 10,
+    fontFamily: 'Courier New',
+    color: '#a3a3a3',
+    lineHeight: 15,
+  },
 });
 
 export default function SettingsScreen() {
-  const { mode } = useApp();
-  const theme = getTheme(mode);
-  const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({});
-  const [toggles, setToggles] = useState({
+  const { userDisplayName, currentCommunityId, isOnboarded, userId } = useApp();
+  const { communityName, members, inviteExpiresAt } = useCommunity();
+  const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
+    sync: true,
+    mesh: false,
+  });
+  const [syncBusy, setSyncBusy] = useState(false);
+  const [importText, setImportText] = useState('');
+  const relayUrl = getRelayBaseUrl();
+  const cryptoReady = Boolean(getCryptoSession()?.isInitialized());
+  const canVerticalSync =
+    isOnboarded &&
+    Boolean(currentCommunityId && currentCommunityId !== '__none__') &&
+    cryptoReady;
+
+  const meshBridgeRef = useRef<MeshtasticBleBridge | null>(null);
+  const meshSessionRef = useRef<MeshtasticSession | null>(null);
+  const meshFromNumStopRef = useRef<(() => void) | null>(null);
+  const [meshNativeOk, setMeshNativeOk] = useState(false);
+  const [meshBleState, setMeshBleState] = useState<BlePoweredState>('Unknown');
+  const [meshScanning, setMeshScanning] = useState(false);
+  const [meshDevices, setMeshDevices] = useState<DiscoveredRadio[]>([]);
+  const [meshConnectedId, setMeshConnectedId] = useState<string | null>(null);
+  const [meshError, setMeshError] = useState<string | null>(null);
+  const [meshHandshakeBusy, setMeshHandshakeBusy] = useState(false);
+  const [meshProtoLog, setMeshProtoLog] = useState('');
+  const [meshNodeNum, setMeshNodeNum] = useState<number | null>(null);
+
+  const stopMeshRadioSubscription = () => {
+    meshFromNumStopRef.current?.();
+    meshFromNumStopRef.current = null;
+  };
+
+  const applyMeshFromRadioDigest = (
+    messages: FromRadioMessage[],
+    expectedConfigId?: number
+  ) => {
+    const { lines, nodeNum } = digestFromRadioMessages(
+      messages,
+      expectedConfigId
+    );
+    if (nodeNum != null) {
+      setMeshNodeNum(nodeNum);
+    }
+    const chunk = lines.join('\n');
+    if (!chunk) return;
+    setMeshProtoLog((prev) =>
+      trimMeshLog(prev ? `${prev}\n${chunk}` : chunk)
+    );
+  };
+
+  const runMeshtasticHandshakeAfterConnect = async () => {
+    const session = meshSessionRef.current;
+    const bridge = meshBridgeRef.current;
+    if (!session || !bridge || !bridge.getConnectedDeviceId()) return;
+
+    stopMeshRadioSubscription();
+    session.resetStream();
+    setMeshHandshakeBusy(true);
+    setMeshError(null);
+    try {
+      const { configId, fromRadioMessages } =
+        await session.requestConfigAndDrainOnce();
+      applyMeshFromRadioDigest(fromRadioMessages, configId);
+      const stop = await bridge.monitorFromNum(() => {
+        void (async () => {
+          try {
+            const more = await session.drainFromRadioMailbox();
+            if (more.length) {
+              applyMeshFromRadioDigest(more);
+            }
+          } catch (err) {
+            setMeshError(
+              err instanceof Error ? err.message : String(err)
+            );
+          }
+        })();
+      });
+      meshFromNumStopRef.current = stop;
+    } catch (e) {
+      setMeshError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setMeshHandshakeBusy(false);
+    }
+  };
+
+  useEffect(() => {
+    const bridge = new MeshtasticBleBridge();
+    meshBridgeRef.current = bridge;
+    meshSessionRef.current = new MeshtasticSession(bridge);
+    setMeshNativeOk(bridge.isNativeBleAvailable());
+    let unsubState = () => {};
+    if (bridge.isNativeBleAvailable()) {
+      void bridge.getBluetoothState().then(setMeshBleState);
+      unsubState = bridge.subscribeState(setMeshBleState);
+    } else {
+      setMeshBleState('Unsupported');
+    }
+    return () => {
+      meshFromNumStopRef.current?.();
+      meshFromNumStopRef.current = null;
+      unsubState();
+      bridge.destroy();
+      meshBridgeRef.current = null;
+      meshSessionRef.current = null;
+    };
+  }, []);
+
+  const profileInitial = (
+    userDisplayName?.trim()?.charAt(0) || 'U'
+  ).toUpperCase();
+
+  const isCoordinator = useMemo(
+    () =>
+      Boolean(
+        userId &&
+          members.some((m) => m.id === userId && m.role === 'coordinator')
+      ),
+    [members, userId]
+  );
+
+  const inviteExpiryLabel =
+    inviteExpiresAt && inviteExpiresAt > 0
+      ? new Date(inviteExpiresAt).toLocaleString()
+      : 'No cutoff (legacy community)';
+
+  const toggles = {
     autoConnect: true,
     relayMode: false,
     checkInReminders: true,
     crisisAlerts: true,
     resourceWarnings: true,
-  });
+  };
 
   const handleToggleSection = (section: string) => {
     setExpandedSections((prev) => ({
       ...prev,
       [section]: !prev[section],
-    }));
-  };
-
-  const handleToggle = (key: keyof typeof toggles) => {
-    setToggles((prev) => ({
-      ...prev,
-      [key]: !prev[key],
     }));
   };
 
@@ -255,12 +465,215 @@ export default function SettingsScreen() {
         {/* Profile Card */}
         <View style={styles.profileCard}>
           <View style={styles.avatar}>
-            <Text style={styles.avatarText}>U</Text>
+            <Text style={styles.avatarText}>{profileInitial}</Text>
           </View>
-          <Text style={styles.profileName}>User Name</Text>
-          <Text style={styles.profileDetail}>Downtown Block 7</Text>
-          <Text style={styles.profileDetail}>Member since Mar 27, 2026</Text>
+          <Text style={styles.profileName}>
+            {userDisplayName?.trim() || 'Community member'}
+          </Text>
+          <Text style={styles.profileDetail}>{communityName}</Text>
+          <Text style={styles.profileDetail}>
+            {isOnboarded ? 'Onboarded' : 'Not onboarded'}
+          </Text>
         </View>
+
+        {renderSection(
+          'Community sync (Phase B)',
+          'sync',
+          <>
+            <Text style={styles.syncHelp}>
+              Encrypted members + check-ins. Sneaker-net needs no server; relay
+              uses EXPO_PUBLIC_EMBER_RELAY_URL. You must already belong to the
+              same community (invite + passphrase) on this device.
+            </Text>
+            <View style={styles.contentRow}>
+              <Text style={styles.contentLabel}>Relay URL</Text>
+              <Text
+                style={[styles.contentValue, { flex: 1, textAlign: 'right' }]}
+                numberOfLines={2}
+              >
+                {relayUrl || '(not set)'}
+              </Text>
+            </View>
+            <Pressable
+              style={[
+                styles.syncButton,
+                styles.syncButtonPrimary,
+                { opacity: !canVerticalSync || !relayUrl || syncBusy ? 0.45 : 1 },
+              ]}
+              disabled={!canVerticalSync || !relayUrl || syncBusy}
+              onPress={() => {
+                if (!currentCommunityId) return;
+                void (async () => {
+                  setSyncBusy(true);
+                  try {
+                    const r = await syncMembersCheckInsViaRelay(currentCommunityId);
+                    Alert.alert(
+                      'Relay sync',
+                      r.pulled
+                        ? `Merged remote snapshot, then pushed. New members: ${r.merge?.membersInserted ?? 0}, check-ins: ${r.merge?.checkInsInserted ?? 0}`
+                        : 'No remote bundle yet; pushed local snapshot.'
+                    );
+                  } catch (e) {
+                    Alert.alert(
+                      'Relay sync failed',
+                      e instanceof Error ? e.message : 'Unknown error'
+                    );
+                  } finally {
+                    setSyncBusy(false);
+                  }
+                })();
+              }}
+            >
+              {syncBusy ? (
+                <ActivityIndicator color="#000000" />
+              ) : (
+                <Text style={[styles.syncButtonText, styles.syncButtonTextDark]}>
+                  Pull, merge & push (relay)
+                </Text>
+              )}
+            </Pressable>
+            <Pressable
+              style={[
+                styles.syncButton,
+                { opacity: !canVerticalSync || syncBusy ? 0.45 : 1 },
+              ]}
+              disabled={!canVerticalSync || syncBusy}
+              onPress={() => {
+                if (!currentCommunityId) return;
+                void (async () => {
+                  try {
+                    const b64 = await exportMembersCheckInsSneakerBase64(
+                      currentCommunityId
+                    );
+                    await Clipboard.setStringAsync(b64);
+                    Alert.alert('Copied', 'Encrypted bundle is on the clipboard.');
+                  } catch (e) {
+                    Alert.alert(
+                      'Copy failed',
+                      e instanceof Error ? e.message : 'Unknown error'
+                    );
+                  }
+                })();
+              }}
+            >
+              <Text style={styles.syncButtonText}>Copy encrypted bundle</Text>
+            </Pressable>
+            <Pressable
+              style={styles.syncButton}
+              onPress={() => {
+                void (async () => {
+                  const t = await Clipboard.getStringAsync();
+                  setImportText(t ?? '');
+                })();
+              }}
+            >
+              <Text style={styles.syncButtonText}>Paste bundle from clipboard</Text>
+            </Pressable>
+            <TextInput
+              style={styles.syncInput}
+              placeholder="Paste ciphertext here to import"
+              placeholderTextColor="#666666"
+              multiline
+              value={importText}
+              onChangeText={setImportText}
+            />
+            <Pressable
+              style={[
+                styles.syncButton,
+                styles.syncButtonPrimary,
+                { opacity: !canVerticalSync || !importText.trim() ? 0.45 : 1 },
+              ]}
+              disabled={!canVerticalSync || !importText.trim()}
+              onPress={() => {
+                void (async () => {
+                  try {
+                    const r = await importMembersCheckInsSneakerBase64(importText);
+                    setImportText('');
+                    Alert.alert(
+                      'Import complete',
+                      `Members +${r.membersInserted}, check-ins +${r.checkInsInserted}`
+                    );
+                  } catch (e) {
+                    Alert.alert(
+                      'Import failed',
+                      e instanceof Error ? e.message : 'Unknown error'
+                    );
+                  }
+                })();
+              }}
+            >
+              <Text style={[styles.syncButtonText, styles.syncButtonTextDark]}>
+                Merge imported bundle
+              </Text>
+            </Pressable>
+          </>
+        )}
+
+        {renderSection(
+          'Coordinator',
+          'coordinator',
+          <>
+            <Text style={styles.syncHelp}>
+              Coordinators can extend how long new members may join. The new date
+              is included in encrypted sync bundles so other devices update when
+              they pull or import.
+            </Text>
+            <View style={styles.contentRow}>
+              <Text style={styles.contentLabel}>Join cutoff</Text>
+              <Text
+                style={[styles.contentValue, { flex: 1, textAlign: 'right' }]}
+                numberOfLines={3}
+              >
+                {inviteExpiryLabel}
+              </Text>
+            </View>
+            <Pressable
+              style={[
+                styles.syncButton,
+                styles.syncButtonPrimary,
+                {
+                  opacity:
+                    !isCoordinator ||
+                    !userId ||
+                    !currentCommunityId ||
+                    currentCommunityId === '__none__'
+                      ? 0.45
+                      : 1,
+                },
+              ]}
+              disabled={
+                !isCoordinator ||
+                !userId ||
+                !currentCommunityId ||
+                currentCommunityId === '__none__'
+              }
+              onPress={() => {
+                if (!userId || !currentCommunityId) return;
+                void (async () => {
+                  try {
+                    const next = await renewCommunityInviteWindow(
+                      currentCommunityId,
+                      userId
+                    );
+                    Alert.alert(
+                      'Join window extended',
+                      `New members can join until ${new Date(next).toLocaleString()}. Sync or share a bundle so other devices see this.`
+                    );
+                  } catch (e) {
+                    Alert.alert(
+                      'Could not extend',
+                      e instanceof Error ? e.message : 'Unknown error'
+                    );
+                  }
+                })();
+              }}
+            >
+              <Text style={[styles.syncButtonText, styles.syncButtonTextDark]}>
+                Extend join window by 90 days
+              </Text>
+            </Pressable>
+          </>
+        )}
 
         {/* Encryption & Security */}
         {renderSection(
@@ -289,26 +702,201 @@ export default function SettingsScreen() {
           'Mesh Network',
           'mesh',
           <>
+            <Text style={styles.syncHelp}>
+              Meshtastic BLE: scan, connect, MTU 512, then want_config on ToRadio and decode FromRadio (official
+              protobufs). FromNum notifications drain new mailbox data. Radio traffic is untrusted for EMBER crypto.
+            </Text>
             <View style={styles.contentRow}>
-              <Text style={styles.contentLabel}>BLE</Text>
-              {renderToggle(toggles.autoConnect)}
+              <Text style={styles.contentLabel}>Bluetooth</Text>
+              <Text style={styles.contentValue}>{meshBleState}</Text>
             </View>
-            <View style={styles.contentRow}>
-              <Text style={styles.contentLabel}>Auto-Connect</Text>
-              {renderToggle(toggles.autoConnect)}
-            </View>
-            <View style={styles.contentRow}>
-              <Text style={styles.contentLabel}>Relay Mode</Text>
-              {renderToggle(toggles.relayMode)}
-            </View>
-            <View style={styles.contentRow}>
-              <Text style={styles.contentLabel}>Channel</Text>
-              <Text style={styles.contentValue}>37</Text>
-            </View>
-            <View style={styles.contentRow}>
-              <Text style={styles.contentLabel}>Region</Text>
-              <Text style={styles.contentValue}>US</Text>
-            </View>
+            {meshHandshakeBusy ? (
+              <View style={[styles.contentRow, { justifyContent: 'flex-start', gap: 8 }]}>
+                <ActivityIndicator color="#d4a574" size="small" />
+                <Text style={styles.contentValue}>Radio handshake…</Text>
+              </View>
+            ) : null}
+            {meshConnectedId ? (
+              <View style={styles.contentRow}>
+                <Text style={styles.contentLabel}>Connected</Text>
+                <Text
+                  style={[styles.contentValue, { flex: 1, textAlign: 'right' }]}
+                  numberOfLines={2}
+                >
+                  {meshConnectedId}
+                </Text>
+              </View>
+            ) : null}
+            {meshNodeNum != null ? (
+              <View style={styles.contentRow}>
+                <Text style={styles.contentLabel}>Radio node num</Text>
+                <Text style={styles.contentValue}>{meshNodeNum}</Text>
+              </View>
+            ) : null}
+            {meshProtoLog ? (
+              <Text style={styles.meshProtoLog}>{meshProtoLog}</Text>
+            ) : null}
+            {meshError ? (
+              <Text style={[styles.syncHelp, { color: '#f59e0b' }]}>{meshError}</Text>
+            ) : null}
+            <Pressable
+              style={[
+                styles.syncButton,
+                {
+                  opacity:
+                    meshBleState !== 'PoweredOn' || !meshNativeOk || meshScanning
+                      ? 0.45
+                      : 1,
+                },
+              ]}
+              disabled={meshBleState !== 'PoweredOn' || !meshNativeOk || meshScanning}
+              onPress={() => {
+                const b = meshBridgeRef.current;
+                if (!b || !meshNativeOk) return;
+                setMeshError(null);
+                setMeshDevices([]);
+                setMeshScanning(true);
+                b.startScan(
+                  (d) => {
+                    setMeshDevices((prev) => {
+                      if (prev.some((x) => x.id === d.id)) return prev;
+                      return [...prev, d];
+                    });
+                  },
+                  (err) => {
+                    setMeshError(err.message);
+                    b.stopScan();
+                    setMeshScanning(false);
+                  }
+                );
+              }}
+            >
+              <Text style={styles.syncButtonText}>
+                {meshScanning ? 'Scanning…' : 'Scan for Meshtastic radios'}
+              </Text>
+            </Pressable>
+            <Pressable
+              style={[
+                styles.syncButton,
+                { opacity: meshScanning ? 1 : 0.45 },
+              ]}
+              disabled={!meshScanning}
+              onPress={() => {
+                meshBridgeRef.current?.stopScan();
+                setMeshScanning(false);
+              }}
+            >
+              <Text style={styles.syncButtonText}>Stop scan</Text>
+            </Pressable>
+            <Pressable
+              style={[
+                styles.syncButton,
+                styles.syncButtonPrimary,
+                { opacity: meshConnectedId ? 1 : 0.45 },
+              ]}
+              disabled={!meshConnectedId}
+              onPress={() => {
+                void (async () => {
+                  const b = meshBridgeRef.current;
+                  const session = meshSessionRef.current;
+                  if (!b) return;
+                  try {
+                    stopMeshRadioSubscription();
+                    session?.resetStream();
+                    await b.disconnect();
+                    setMeshConnectedId(null);
+                    setMeshNodeNum(null);
+                    setMeshProtoLog('');
+                  } catch (e) {
+                    Alert.alert(
+                      'Disconnect failed',
+                      e instanceof Error ? e.message : 'Unknown error'
+                    );
+                  }
+                })();
+              }}
+            >
+              <Text style={[styles.syncButtonText, styles.syncButtonTextDark]}>
+                Disconnect
+              </Text>
+            </Pressable>
+            <Pressable
+              style={[
+                styles.syncButton,
+                {
+                  opacity:
+                    !meshConnectedId || meshHandshakeBusy || !meshNativeOk
+                      ? 0.45
+                      : 1,
+                },
+              ]}
+              disabled={!meshConnectedId || meshHandshakeBusy || !meshNativeOk}
+              onPress={() => {
+                void (async () => {
+                  const session = meshSessionRef.current;
+                  if (!session || !meshConnectedId) return;
+                  setMeshHandshakeBusy(true);
+                  setMeshError(null);
+                  try {
+                    const { configId, fromRadioMessages } =
+                      await session.requestConfigAndDrainOnce();
+                    applyMeshFromRadioDigest(fromRadioMessages, configId);
+                  } catch (e) {
+                    setMeshError(
+                      e instanceof Error ? e.message : String(e)
+                    );
+                  } finally {
+                    setMeshHandshakeBusy(false);
+                  }
+                })();
+              }}
+            >
+              <Text style={styles.syncButtonText}>
+                Re-request config (want_config)
+              </Text>
+            </Pressable>
+            {meshDevices.map((d) => (
+              <Pressable
+                key={d.id}
+                style={styles.meshDeviceRow}
+                onPress={() => {
+                  void (async () => {
+                    const b = meshBridgeRef.current;
+                    if (!b || !meshNativeOk) return;
+                    try {
+                      setMeshError(null);
+                      setMeshProtoLog('');
+                      setMeshNodeNum(null);
+                      await b.connect(d.id);
+                      setMeshConnectedId(b.getConnectedDeviceId());
+                      b.stopScan();
+                      setMeshScanning(false);
+                      await runMeshtasticHandshakeAfterConnect();
+                    } catch (e) {
+                      Alert.alert(
+                        'Connect failed',
+                        e instanceof Error ? e.message : 'Unknown error'
+                      );
+                    }
+                  })();
+                }}
+              >
+                <View style={{ flex: 1, marginRight: 8 }}>
+                  <Text style={styles.meshDeviceTitle}>
+                    {d.name ?? 'Unnamed radio'}
+                  </Text>
+                  <Text style={styles.meshDeviceMeta}>
+                    {d.id}
+                    {d.rssi != null ? ` · RSSI ${d.rssi}` : ''}
+                  </Text>
+                </View>
+                {meshConnectedId === d.id ? (
+                  <Text style={styles.meshBadge}>Active</Text>
+                ) : (
+                  <Text style={styles.meshBadge}>Connect</Text>
+                )}
+              </Pressable>
+            ))}
           </>
         )}
 

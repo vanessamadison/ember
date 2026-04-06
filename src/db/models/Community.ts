@@ -16,7 +16,7 @@ export default class Community extends Model {
     drills: { type: 'has_many', foreignKey: 'community_id' },
     emergency_plans: { type: 'has_many', foreignKey: 'community_id' },
     messages: { type: 'has_many', foreignKey: 'community_id' },
-  };
+  } as const;
 
   @text('name') name!: string;
 
@@ -24,11 +24,15 @@ export default class Community extends Model {
 
   @text('invite_code') inviteCode!: string;
 
+  @text('derivation_salt') derivationSalt?: string;
+
   @field('created_at') createdAt!: number;
 
   @field('member_count') memberCount!: number;
 
   @field('is_active') isActive!: boolean;
+
+  @field('invite_expires_at') inviteExpiresAt?: number;
 
   @readonly @date('created_at') createdAtDate!: Date;
 

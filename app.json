@@ -63,7 +63,8 @@
           "icon": "./assets/notification-icon.png",
           "color": "#d4a574"
         }
-      ]
+      ],
+      "react-native-ble-plx"
     ],
     "experiments": {
       "typedRoutes": true

@@ -4,7 +4,6 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  FlatList,
   Pressable,
   TextInput,
 } from 'react-native';
@@ -179,12 +178,18 @@ export default function ResourcesScreen() {
   }, [resources]);
 
   const criticalCount = useMemo(() => {
-    return resources.filter((r) => r.stock < r.target).length;
+    return resources.filter((r) => {
+      const t = r.criticalThreshold ?? 5;
+      return r.quantity <= t;
+    }).length;
   }, [resources]);
 
   const healthPercent = useMemo(() => {
     if (resources.length === 0) return 100;
-    const healthy = resources.filter((r) => r.stock >= r.target).length;
+    const healthy = resources.filter((r) => {
+      const t = r.criticalThreshold ?? 5;
+      return r.quantity > t;
+    }).length;
     return Math.round((healthy / resources.length) * 100);
   }, [resources]);
 
@@ -203,7 +208,7 @@ export default function ResourcesScreen() {
     if (selectedResource && quantity.trim()) {
       const amount = parseInt(quantity, 10);
       if (!isNaN(amount) && amount > 0) {
-        updateResource(selectedResource.id, selectedResource.stock - amount);
+        updateResource(selectedResource.id, selectedResource.quantity - amount);
         handleCloseModal();
       }
     }
@@ -213,7 +218,7 @@ export default function ResourcesScreen() {
     if (selectedResource && quantity.trim()) {
       const amount = parseInt(quantity, 10);
       if (!isNaN(amount) && amount > 0) {
-        updateResource(selectedResource.id, selectedResource.stock + amount);
+        updateResource(selectedResource.id, selectedResource.quantity + amount);
         handleCloseModal();
       }
     }
@@ -252,14 +257,22 @@ export default function ResourcesScreen() {
 
               return (
                 <View key={category} style={styles.section}>
-                  <SectionHeader title={category} count={categoryResources.length} />
+                  <SectionHeader accent={theme.accent}>
+                    {`${category} (${categoryResources.length})`}
+                  </SectionHeader>
                   {categoryResources.map((resource) => (
                     <Pressable
                       key={resource.id}
                       onPress={() => handleOpenModal(resource.id)}
                       style={styles.resourceItem}
                     >
-                      <ResourceBar resource={resource} theme={theme} />
+                      <ResourceBar
+                        name={resource.name}
+                        quantity={resource.quantity}
+                        max={resource.maxCapacity ?? 100}
+                        criticalThreshold={resource.criticalThreshold ?? 5}
+                        accent={theme.accent}
+                      />
                     </Pressable>
                   ))}
                 </View>
@@ -305,7 +318,7 @@ export default function ResourcesScreen() {
             }}
           >
             <Text style={{ color: '#ffffff', fontSize: 13 }}>
-              {selectedResource?.stock} {selectedResource?.unit}
+              {selectedResource?.quantity} {selectedResource?.unit}
             </Text>
           </View>
 
@@ -322,7 +335,7 @@ export default function ResourcesScreen() {
             }}
           >
             <Text style={{ color: '#ffffff', fontSize: 13 }}>
-              {selectedResource?.target} {selectedResource?.unit}
+              20 {selectedResource?.unit}
             </Text>
           </View>
 

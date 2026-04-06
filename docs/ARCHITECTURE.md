@@ -406,6 +406,7 @@ EMBER Tier 1 requires zero backend infrastructure. The app is fully functional w
 EMBER Node Kits are pre-configured Meshtastic relay nodes. The app integrates via:
 
 - BLE pairing protocol (standard Meshtastic BLE API)
+- **Current Tier 1 prototype:** scan, connect, MTU negotiation, `want_config` / FromRadio drain, and FromNum-driven mailbox reads — see [MESHTASTIC-BLE.md](./MESHTASTIC-BLE.md).
 - Node status monitoring (battery level, solar charge, signal strength)
 - Network topology visualization
 - Remote firmware update (planned)
@@ -436,6 +437,9 @@ EMBER Communicator is a standalone device based on T-Deck Plus. Integration poin
 | react-native-svg | 15.8.0 | Graphics | MIT |
 | expo-crypto | ~14.0.0 | PBKDF2/SHA256 | MIT |
 | expo-secure-store | ~14.0.0 | Key storage | MIT |
+| react-native-ble-plx | ^3.5.x | Meshtastic BLE GATT (dev client) | Apache-2.0 |
+| @meshtastic/protobufs | pinned | Meshtastic `.proto` generated types | GPL-3.0 |
+| @bufbuild/protobuf | ^2.x | Protobuf-ES runtime | (Apache-2.0 AND BSD-3-Clause) |
 
 ## Appendix B: Glossary
 

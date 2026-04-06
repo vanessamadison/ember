@@ -1,7 +1,8 @@
 import { appSchema, tableSchema } from '@nozbe/watermelondb';
+import { schemaMigrations, addColumns } from '@nozbe/watermelondb/Schema/migrations';
 
 export const schema = appSchema({
-  version: 1,
+  version: 5,
   tables: [
     tableSchema({
       name: 'communities',
@@ -9,9 +10,11 @@ export const schema = appSchema({
         { name: 'name', type: 'string' },
         { name: 'passphrase_hash', type: 'string' },
         { name: 'invite_code', type: 'string' },
+        { name: 'derivation_salt', type: 'string', isOptional: true },
         { name: 'created_at', type: 'number' },
         { name: 'member_count', type: 'number' },
         { name: 'is_active', type: 'boolean' },
+        { name: 'invite_expires_at', type: 'number', isOptional: true },
       ],
     }),
     tableSchema({
@@ -27,6 +30,8 @@ export const schema = appSchema({
         { name: 'skills_json', type: 'string' },
         { name: 'resources_json', type: 'string' },
         { name: 'is_self', type: 'boolean' },
+        { name: 'public_id', type: 'string', isOptional: true },
+        { name: 'removed_at', type: 'number', isOptional: true },
       ],
     }),
     tableSchema({
@@ -42,6 +47,7 @@ export const schema = appSchema({
         { name: 'icon', type: 'string' },
         { name: 'last_updated', type: 'number' },
         { name: 'updated_by', type: 'string' },
+        { name: 'public_id', type: 'string', isOptional: true },
       ],
     }),
     tableSchema({
@@ -53,6 +59,7 @@ export const schema = appSchema({
         { name: 'timestamp', type: 'number' },
         { name: 'location_encrypted', type: 'string' },
         { name: 'note', type: 'string' },
+        { name: 'sync_id', type: 'string', isOptional: true },
       ],
     }),
     tableSchema({
@@ -106,5 +113,54 @@ export const schema = appSchema({
         { name: 'earned_at', type: 'number' },
       ],
     }),
+  ],
+});
+
+export const migrations = schemaMigrations({
+  migrations: [
+    {
+      toVersion: 2,
+      steps: [
+        addColumns({
+          table: 'communities',
+          columns: [{ name: 'derivation_salt', type: 'string', isOptional: true }],
+        }),
+      ],
+    },
+    {
+      toVersion: 3,
+      steps: [
+        addColumns({
+          table: 'members',
+          columns: [{ name: 'public_id', type: 'string', isOptional: true }],
+        }),
+        addColumns({
+          table: 'check_ins',
+          columns: [{ name: 'sync_id', type: 'string', isOptional: true }],
+        }),
+      ],
+    },
+    {
+      toVersion: 4,
+      steps: [
+        addColumns({
+          table: 'communities',
+          columns: [{ name: 'invite_expires_at', type: 'number', isOptional: true }],
+        }),
+        addColumns({
+          table: 'members',
+          columns: [{ name: 'removed_at', type: 'number', isOptional: true }],
+        }),
+      ],
+    },
+    {
+      toVersion: 5,
+      steps: [
+        addColumns({
+          table: 'resources',
+          columns: [{ name: 'public_id', type: 'string', isOptional: true }],
+        }),
+      ],
+    },
   ],
 });

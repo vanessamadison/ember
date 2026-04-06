@@ -1,7 +1,7 @@
 import { Database } from '@nozbe/watermelondb';
 import SQLiteAdapter from '@nozbe/watermelondb/adapters/sqlite';
 import LokiJSAdapter from '@nozbe/watermelondb/adapters/lokijs';
-import { schema } from './schema';
+import { schema, migrations } from './schema';
 import {
   Community,
   Member,
@@ -21,6 +21,7 @@ if (isNative) {
   // Native platform (React Native/Expo)
   adapter = new SQLiteAdapter({
     schema,
+    migrations,
     dbName: 'ember.db',
     jsi: undefined,
     onSetUpError: (error) => {
@@ -31,6 +32,7 @@ if (isNative) {
   // Web platform
   adapter = new LokiJSAdapter({
     schema,
+    migrations,
     dbName: 'ember_web',
     onSetUpError: (error) => {
       console.error('Database setup error:', error);

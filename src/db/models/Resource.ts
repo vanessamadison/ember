@@ -11,7 +11,7 @@ export default class Resource extends Model {
 
   static associations = {
     community: { type: 'belongs_to', key: 'community_id' },
-  };
+  } as const;
 
   @readonly @text('community_id') communityId!: string;
 
@@ -32,6 +32,8 @@ export default class Resource extends Model {
   @field('last_updated') lastUpdated!: number;
 
   @text('updated_by') updatedBy!: string;
+
+  @text('public_id') publicId?: string;
 
   @relation('community', 'community_id') community!: any;
 

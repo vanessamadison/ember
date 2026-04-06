@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import { STATUS } from '../constants';
 
 export interface Member {
@@ -29,39 +29,41 @@ export function useMembers(communityId: string): UseMembersResult {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
 
-  // Mock data for initialization
-  const mockMembers: Member[] = [
-    {
-      id: 'member_1',
-      communityId,
-      name: 'Alice Johnson',
-      status: STATUS.SAFE,
-      lastCheckIn: Date.now() - 3600000,
-      xp: 250,
-      level: 3,
-      avatar: 'AJ',
-    },
-    {
-      id: 'member_2',
-      communityId,
-      name: 'Bob Smith',
-      status: STATUS.HELP,
-      lastCheckIn: Date.now() - 7200000,
-      xp: 150,
-      level: 2,
-      avatar: 'BS',
-    },
-    {
-      id: 'member_3',
-      communityId,
-      name: 'Carol Williams',
-      status: STATUS.UNKNOWN,
-      lastCheckIn: Date.now() - 86400000,
-      xp: 75,
-      level: 1,
-      avatar: 'CW',
-    },
-  ];
+  const mockMembers = useMemo((): Member[] => {
+    const t = Date.now();
+    return [
+      {
+        id: 'member_1',
+        communityId,
+        name: 'Alice Johnson',
+        status: STATUS.SAFE,
+        lastCheckIn: t - 3600000,
+        xp: 250,
+        level: 3,
+        avatar: 'AJ',
+      },
+      {
+        id: 'member_2',
+        communityId,
+        name: 'Bob Smith',
+        status: STATUS.HELP,
+        lastCheckIn: t - 7200000,
+        xp: 150,
+        level: 2,
+        avatar: 'BS',
+      },
+      {
+        id: 'member_3',
+        communityId,
+        name: 'Carol Williams',
+        status: STATUS.UNKNOWN,
+        lastCheckIn: t - 86400000,
+        xp: 75,
+        level: 1,
+        avatar: 'CW',
+      },
+    ];
+  }, [communityId]);
 
   useEffect(() => {
     const loadMembers = async () => {
@@ -81,7 +83,7 @@ export function useMembers(communityId: string): UseMembersResult {
     };
 
     loadMembers();
-  }, [communityId]);
+  }, [communityId, mockMembers]);
 
   const checkIn = useCallback(
     async (memberId: string, status: STATUS): Promise<void> => {

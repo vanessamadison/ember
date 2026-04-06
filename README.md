@@ -95,7 +95,7 @@ EMBER is a three-tier system. Each tier is independent:
 - **Preparedness gamification** — Drills with XP, achievements, readiness scores, daily check-in streaks
 - **Emergency plans** — Encrypted offline storage with printable analog kit
 - **Crisis mode** — Simplified UI, mesh-first communication, power-optimized operation
-- **Mesh network ready** — BLE bridge to Meshtastic LoRa hardware (Tier 2 integration)
+- **Mesh network (prototype)** — BLE + official Meshtastic protobufs: `want_config`, FromRadio drain, FromNum notifications (Settings → Mesh Network). See [docs/MESHTASTIC-BLE.md](docs/MESHTASTIC-BLE.md).
 - **CRDT sync** — Conflict-free replicated data types for offline conflict resolution
 
 ## Tech Stack
@@ -154,6 +154,17 @@ eas submit --platform ios
 eas submit --platform android
 ```
 
+## Documentation
+
+| Doc | Purpose |
+|-----|---------|
+| [docs/MVP-GUIDE.md](docs/MVP-GUIDE.md) | MVP vs three-tier plan, deployment vs funding gaps, phased roadmap |
+| [docs/THREAT-MODEL-MATRIX.md](docs/THREAT-MODEL-MATRIX.md) | Tier-aware threats, controls, owners, pilot metrics |
+| [docs/MVP-DEPLOY.md](docs/MVP-DEPLOY.md) | EAS builds, TestFlight / Play internal, env notes |
+| [docs/PHASE-B-SYNC.md](docs/PHASE-B-SYNC.md) | Members + check-ins sync (sneaker-net + relay) |
+| [docs/MESHTASTIC-BLE.md](docs/MESHTASTIC-BLE.md) | Meshtastic BLE + protobuf handshake (Tier 2 bring-up) |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Technical specification |
+
 ## Project Structure
 
 ```
@@ -184,9 +195,10 @@ ember/
 │   │   ├── keyDerivation.ts      # PBKDF2 key derivation
 │   │   ├── encryption.ts         # NaCl secretbox encrypt/decrypt
 │   │   └── index.ts              # CryptoManager class
-│   ├── sync/                     # CRDT sync engine
-│   │   ├── crdt.ts               # GCounter, PNCounter, LWW, HLC
-│   │   ├── peerSync.ts           # Peer sync manager
+│   ├── mesh/                     # Meshtastic BLE bridge + protobuf session
+│   ├── sync/                     # Phase B encrypted sync, CRDT, relay
+│   │   ├── types.ts, snapshot.ts, merge.ts, sneakerNet.ts, httpRelay.ts
+│   │   ├── refreshHub.ts         # UI refresh after DB mutation / merge
 │   │   └── index.ts
 │   ├── context/                  # State management
 │   ├── hooks/                    # Custom React hooks
@@ -214,6 +226,10 @@ EMBER is open source under AGPL v3. Contributions welcome.
 5. Open a Pull Request
 
 Please read `docs/ARCHITECTURE.md` before contributing to understand the encryption and sync architecture.
+
+## Use of GenAI
+
+This project uses Claude (Anthropic, Opus 4.6) as a development assistant for code generation, documentation, and proposal preparation. All architectural decisions, security design, encryption choices, and creative direction are human-led by the project maintainer. AI-assisted contributions are marked in git history via `Co-Authored-By` tags in commit messages. See [docs/GENAI-PROMPT-LOG.md](docs/GENAI-PROMPT-LOG.md) for the full provenance log.
 
 ## License
 

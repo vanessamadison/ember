@@ -1,5 +1,6 @@
 import { database } from './index';
 import { Community, Member, Resource, CheckIn, Drill, EmergencyPlan, Message, Achievement } from './models';
+import { randomUuid } from '../sync/uuid';
 
 const now = Date.now();
 const oneHourAgo = now - 3600000;
@@ -11,14 +12,16 @@ export async function seedDatabase(): Promise<void> {
     await database.write(async () => {
       // Create community
       const community = await database
-        .get<typeof Community>('communities')
+        .get<Community>('communities')
         .create((c) => {
           c.name = 'Riverside Community';
           c.passphraseHash = '$2b$10$examplehash1234567890'; // bcrypt hash of "ember2024"
           c.inviteCode = 'EMBER2024';
+          c.derivationSalt = btoa('seed-dummy-salt!!');
           c.createdAt = sevenDaysAgo;
           c.memberCount = 8;
           c.isActive = true;
+          c.inviteExpiresAt = now + 10 * 365 * 86400000;
         });
 
       // Create members with varied roles and skills
@@ -165,9 +168,10 @@ export async function seedDatabase(): Promise<void> {
       const members = await Promise.all(
         memberData.map((m) =>
           database
-            .get<typeof Member>('members')
+            .get<Member>('members')
             .create((member) => {
               member.communityId = community.id;
+              member.publicId = randomUuid();
               member.name = m.name;
               member.role = m.role;
               member.avatar = m.avatar;
@@ -296,9 +300,10 @@ export async function seedDatabase(): Promise<void> {
       await Promise.all(
         resourceData.map((r) =>
           database
-            .get<typeof Resource>('resources')
+            .get<Resource>('resources')
             .create((resource) => {
               resource.communityId = community.id;
+              resource.publicId = randomUuid();
               resource.category = r.category;
               resource.name = r.name;
               resource.quantity = r.quantity;
@@ -375,7 +380,7 @@ export async function seedDatabase(): Promise<void> {
       await Promise.all(
         checkInData.map((c) =>
           database
-            .get<typeof CheckIn>('check_ins')
+            .get<CheckIn>('check_ins')
             .create((checkIn) => {
               checkIn.memberId = c.memberId;
               checkIn.communityId = community.id;
@@ -383,6 +388,7 @@ export async function seedDatabase(): Promise<void> {
               checkIn.timestamp = c.timestamp;
               checkIn.locationEncrypted = Buffer.from(c.location).toString('base64');
               checkIn.note = c.note;
+              checkIn.syncId = randomUuid();
             })
         )
       );
@@ -464,7 +470,7 @@ export async function seedDatabase(): Promise<void> {
       await Promise.all(
         drillData.map((d) =>
           database
-            .get<typeof Drill>('drills')
+            .get<Drill>('drills')
             .create((drill) => {
               drill.communityId = community.id;
               drill.name = d.name;
@@ -523,7 +529,7 @@ export async function seedDatabase(): Promise<void> {
       await Promise.all(
         planData.map((p) =>
           database
-            .get<typeof EmergencyPlan>('emergency_plans')
+            .get<EmergencyPlan>('emergency_plans')
             .create((plan) => {
               plan.communityId = community.id;
               plan.name = p.name;
@@ -615,7 +621,7 @@ export async function seedDatabase(): Promise<void> {
       await Promise.all(
         messageData.map((m) =>
           database
-            .get<typeof Message>('messages')
+            .get<Message>('messages')
             .create((message) => {
               message.communityId = community.id;
               message.senderId = m.senderId;
@@ -713,7 +719,7 @@ export async function seedDatabase(): Promise<void> {
       await Promise.all(
         achievementData.map((a) =>
           database
-            .get<typeof Achievement>('achievements')
+            .get<Achievement>('achievements')
             .create((achievement) => {
               achievement.memberId = a.memberId;
               achievement.name = a.name;

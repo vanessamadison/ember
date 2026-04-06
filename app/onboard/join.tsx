@@ -1,5 +1,5 @@
-import { router } from 'expo-router';
-import React, { useState } from 'react';
+import { router, useLocalSearchParams } from 'expo-router';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -7,8 +7,11 @@ import {
   StyleSheet,
   ScrollView,
   TextInput,
+  Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { joinCommunityInDb } from '../../src/db/communityLifecycle';
 import { useApp } from '../../src/context/AppContext';
 
 const styles = StyleSheet.create({
@@ -133,10 +136,28 @@ const SKILLS = [
 ];
 
 export default function JoinCommunityScreen() {
-  const { setOnboarded } = useApp();
+  const { displayName: displayNameParam } = useLocalSearchParams<{
+    displayName?: string;
+  }>();
+  const displayName =
+    typeof displayNameParam === 'string' ? displayNameParam.trim() : '';
+
+  const {
+    setOnboarded,
+    setCommunity,
+    setUser,
+    setUserDisplayName,
+  } = useApp();
   const [inviteCode, setInviteCode] = useState('');
   const [passphrase, setPassphrase] = useState('');
   const [selectedSkills, setSelectedSkills] = useState<string[]>([]);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (!displayName) {
+      router.replace('/onboard');
+    }
+  }, [displayName]);
 
   const handleToggleSkill = (skill: string) => {
     setSelectedSkills((prev) =>
@@ -144,16 +165,38 @@ export default function JoinCommunityScreen() {
     );
   };
 
-  const handleJoin = () => {
-    if (inviteCode.trim() && passphrase.trim()) {
+  const handleJoin = async () => {
+    if (!inviteCode.trim() || !passphrase.trim() || !displayName || busy) {
+      return;
+    }
+    setBusy(true);
+    try {
+      const { communityId, memberId } = await joinCommunityInDb({
+        inviteCode,
+        passphrase: passphrase.trim(),
+        displayName,
+        skills: selectedSkills,
+      });
+      setUserDisplayName(displayName);
+      setUser(memberId);
+      setCommunity(communityId);
       setOnboarded(true);
       router.replace('/(tabs)');
+    } catch (e) {
+      const message = e instanceof Error ? e.message : 'Could not join community.';
+      Alert.alert('Join failed', message);
+    } finally {
+      setBusy(false);
     }
   };
 
   const handleBack = () => {
     router.back();
   };
+
+  if (!displayName) {
+    return null;
+  }
 
   return (
     <SafeAreaView style={styles.container}>
@@ -172,7 +215,7 @@ export default function JoinCommunityScreen() {
               style={[styles.input, styles.inviteInput]}
               placeholder="EMBR-XXXX-XXXX"
               placeholderTextColor="#666666"
-              value={inviteCode.toUpperCase()}
+              value={inviteCode}
               onChangeText={(text) => setInviteCode(text.toUpperCase())}
             />
           </View>
@@ -209,12 +252,21 @@ export default function JoinCommunityScreen() {
           </View>
 
           <Pressable
-            style={styles.button}
-            onPress={handleJoin}
-            disabled={!inviteCode.trim() || !passphrase.trim()}
-            opacity={!inviteCode.trim() || !passphrase.trim() ? 0.5 : 1}
+            style={[
+              styles.button,
+              {
+                opacity:
+                  !inviteCode.trim() || !passphrase.trim() || busy ? 0.5 : 1,
+              },
+            ]}
+            onPress={() => void handleJoin()}
+            disabled={!inviteCode.trim() || !passphrase.trim() || busy}
           >
-            <Text style={styles.buttonText}>Join Community</Text>
+            {busy ? (
+              <ActivityIndicator color="#000000" />
+            ) : (
+              <Text style={styles.buttonText}>Join Community</Text>
+            )}
           </Pressable>
         </View>
       </ScrollView>

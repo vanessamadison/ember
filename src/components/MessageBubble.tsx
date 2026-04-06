@@ -1,12 +1,37 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
+import { useClock } from '../hooks/useClock';
+
+function formatMessageTime(timestamp: number, now: number): string {
+  const diffMs = now - timestamp;
+  const diffMins = Math.floor(diffMs / 60000);
+  const diffHours = Math.floor(diffMs / 3600000);
+
+  if (diffMins < 60) return `${diffMins}m ago`;
+  if (diffHours < 24) return `${diffHours}h ago`;
+
+  const date = new Date(timestamp);
+  return date.toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+}
 
 interface Message {
   id: string;
   sender: string;
   text: string;
   timestamp: number;
-  type?: 'system' | 'resource' | 'broadcast' | 'social';
+  type?:
+    | 'system'
+    | 'resource'
+    | 'broadcast'
+    | 'social'
+    | 'text'
+    | 'alert'
+    | 'drill';
 }
 
 interface MessageBubbleProps {
@@ -18,6 +43,12 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
   message,
   accent,
 }) => {
+  const now = useClock();
+  const formattedTime = useMemo(
+    () => formatMessageTime(message.timestamp, now),
+    [message.timestamp, now]
+  );
+
   const getTypeColor = (type: string | undefined) => {
     switch (type) {
       case 'system':
@@ -33,26 +64,7 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
     }
   };
 
-  const getFormattedTime = (timestamp: number) => {
-    const now = Date.now();
-    const diffMs = now - timestamp;
-    const diffMins = Math.floor(diffMs / 60000);
-    const diffHours = Math.floor(diffMs / 3600000);
-
-    if (diffMins < 60) return `${diffMins}m ago`;
-    if (diffHours < 24) return `${diffHours}h ago`;
-
-    const date = new Date(timestamp);
-    return date.toLocaleDateString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      hour: 'numeric',
-      minute: '2-digit',
-    });
-  };
-
   const typeColor = getTypeColor(message.type);
-  const formattedTime = getFormattedTime(message.timestamp);
 
   return (
     <View style={styles.container}>
