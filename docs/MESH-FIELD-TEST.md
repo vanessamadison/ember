@@ -2,6 +2,8 @@
 
 Hands-on validation for **Meshtastic BLE + EMBER Phase B sync** over the air. Use a **native dev or release build** (not Expo Go). See [MESHTASTIC-BLE.md](./MESHTASTIC-BLE.md) for architecture.
 
+**Hardware:** [MESH-HARDWARE-GUIDE.md](./MESH-HARDWARE-GUIDE.md) (what to buy, no custom PCB). **After the run:** [PILOT-FIELD-SUMMARY.md](./PILOT-FIELD-SUMMARY.md) (template + checklists).
+
 **Improvement plan (logs, onboarding, reliability):** [PLAN-FIELD-MESH-POLISH.md](./PLAN-FIELD-MESH-POLISH.md).
 
 ## Roles

@@ -18,6 +18,7 @@ All notable changes to this repository are documented here. The format is loosel
 ### Documentation
 
 - **`MESHTASTIC-BLE.md`**, **`MESH-FIELD-TEST.md`**, **`PLAN-FIELD-MESH-POLISH.md`**, **`PLAN-MESH-TIER2-ROLLOUT.md`**, **`MVP-GUIDE.md`**, **`ARCHITECTURE.md`**, **`README.md`** — Aligned with implementation (crisis tabs, mesh prototype truth, sync flows, onboarding, field log template).
+- **`PILOT-FIELD-SUMMARY.md`**, **`MESH-HARDWARE-GUIDE.md`** — Pilot write-up template, pre/post checklists, Meshtastic hardware sourcing and testing (no custom PCB).
 - **`docs/PLAN-FIELD-MESH-POLISH.md`** — Executed checklist + follow-ups (file share marked done).
 
 ### Dependencies

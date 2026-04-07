@@ -166,6 +166,8 @@ eas submit --platform android
 | [docs/MESHTASTIC-BLE.md](docs/MESHTASTIC-BLE.md) | Meshtastic BLE + protobuf handshake (Tier 2 bring-up) |
 | [docs/PLAN-MESH-TIER2-ROLLOUT.md](docs/PLAN-MESH-TIER2-ROLLOUT.md) | Phased plan: mesh app layer, BLE UX, robustness, CI, crisis UI |
 | [docs/MESH-FIELD-TEST.md](docs/MESH-FIELD-TEST.md) | Two-device mesh + LoRa field test runbook |
+| [docs/PILOT-FIELD-SUMMARY.md](docs/PILOT-FIELD-SUMMARY.md) | Pilot write-up template + pre/post field & release checklists |
+| [docs/MESH-HARDWARE-GUIDE.md](docs/MESH-HARDWARE-GUIDE.md) | What to buy (Meshtastic-compatible), how to test, where to source |
 | [docs/PLAN-FIELD-MESH-POLISH.md](docs/PLAN-FIELD-MESH-POLISH.md) | Field logs, BLE onboarding polish, mesh reliability tweaks |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Technical specification |
 
