@@ -40,8 +40,10 @@ try {
  * Minimal Meshtastic BLE client: scan, connect, MTU, write framed ToRadio bytes.
  * Parsing protobufs (FromRadio / ToRadio) is a separate step (Meshtastic-protobufs).
  */
-const ATT_WRITE_MAX_ATTEMPTS = 3;
-const ATT_WRITE_RETRY_BASE_MS = 100;
+/** Best-effort retries for each ToRadio ATT write; see MESHTASTIC-BLE.md */
+const ATT_WRITE_MAX_ATTEMPTS = 4;
+const ATT_WRITE_RETRY_BASE_MS = 120;
+const ATT_WRITE_RETRY_JITTER_MS = 96;
 
 export class MeshtasticBleBridge {
   private manager: BleManager | null = null;
@@ -233,9 +235,10 @@ export class MeshtasticBleBridge {
         } catch (e) {
           lastErr = e;
           if (attempt < ATT_WRITE_MAX_ATTEMPTS - 1) {
-            await new Promise((r) =>
-              setTimeout(r, ATT_WRITE_RETRY_BASE_MS * (attempt + 1))
-            );
+            const backoff =
+              ATT_WRITE_RETRY_BASE_MS * (attempt + 1) +
+              Math.floor(Math.random() * ATT_WRITE_RETRY_JITTER_MS);
+            await new Promise((r) => setTimeout(r, backoff));
           }
         }
       }

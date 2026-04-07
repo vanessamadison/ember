@@ -2,6 +2,8 @@
 
 This document describes how EMBER talks to Meshtastic radios over Bluetooth Low Energy in **development builds** (not Expo Go). It complements `docs/ARCHITECTURE.md` section **5.2 Meshtastic Integration**.
 
+**Field pilots:** use [MESH-FIELD-TEST.md](./MESH-FIELD-TEST.md) (includes a copy-paste log template). **Rolling improvements:** [PLAN-FIELD-MESH-POLISH.md](./PLAN-FIELD-MESH-POLISH.md).
+
 ## What works today
 
 - **Scan** for peripherals advertising the Meshtastic mesh service UUID (see [Meshtastic Client API](https://meshtastic.org/docs/development/device/client-api/)).
@@ -14,7 +16,18 @@ This document describes how EMBER talks to Meshtastic radios over Bluetooth Low 
 - **Community / People tab** — Member roster and status only. In **crisis mode** the bottom tab for that screen is still **People** (aligned with peacetime) so users are not steered here for Meshtastic. A short in-screen note explains that **LoRa pairing**, **broadcast**, and **last import** live on **Home** and **Settings → Mesh Network**.
 - **Settings → Mesh Network**: scan, connect, disconnect, live digest log (e.g. `MyNode`, `ConfigComplete`, packets). **Re-request config** repeats `want_config` without reconnecting. **Broadcast encrypted snapshot** sends the Phase B bundle over LoRa (v1 or chunked v2); **Last mesh import** shows the most recent merge result from `useMeshRadioStore.meshInboundLast`. BLE lifecycle is **not** screen-local; it follows the provider above.
 - **Broadcast feedback** — After the radio path completes successfully, the UI shows **Mesh snapshot sent** (packet count and on-air bundle size; reception still depends on RF). **Cancel** on the multi-chunk confirmation does **not** show that alert. Failures use **Mesh broadcast failed** with the error detail.
-- **EMBER mesh payloads (portnum 270)** — Wire bytes use **envelope v1** (single frame) or **v2** (chunked UTF-8 of the same base64 bundle string). **`MeshtasticSession.sendEmberMeshMessageUtf8`** picks v1 when the UTF-8 fits one frame, else v2 with **`EMBER_MESH_INTER_CHUNK_DELAY_MS`** between ATT writes. Receive path reassembles v2 in `emberMeshChunkReassembly.ts` before decrypt/merge. Dev: Settings → **Send full encrypted sync (chunked if needed)**.
+- **Outbound status** — **Last mesh send** (time, packet count, bundle size) is stored in `meshRadioStore` and shown on Home and Config. While chunked frames are writing to ToRadio, **LoRa frames written: N / M** appears (global store so Home and Settings stay aligned). Diagnostic export includes **Last mesh send (outbound)**.
+- **EMBER mesh payloads (portnum 270)** — Wire bytes use **envelope v1** (single frame) or **v2** (chunked UTF-8 of the same base64 bundle string). **`MeshtasticSession.sendEmberMeshMessageUtf8`** picks v1 when the UTF-8 fits one frame, else v2 with **user-configurable pause** between ATT writes (`meshInterChunkDelayPreference`, chips on **Mesh Network**; default `EMBER_MESH_INTER_CHUNK_DELAY_MS`). Receive path reassembles v2 in `emberMeshChunkReassembly.ts` before decrypt/merge. User action: **Broadcast encrypted snapshot over mesh**.
+
+## First-time BLE / mesh onboarding
+
+- **Welcome** — Onboarding includes a **Tier 2** card: native build only, **Config → Mesh Network**, permission expectations, crisis path to Config.
+- **Deep link** — `/(tabs)/settings?section=mesh` opens Config with **Mesh Network** expanded and scrolled into view (Home **Config** uses `navigateToMeshSettings()` which bumps a focus token when the Config tab is already active so params may not update). After handling, the `section` query param is cleared to avoid re-expanding on every revisit.
+- **First scan** — On **Mesh Network**, when Bluetooth is already **On**, a short **first-time pairing** hint explains tap **Scan**, accept OS prompts, and fix denials in system app settings.
+- **Android 12+** — Runtime **Nearby devices** / Bluetooth scan often appears on the first scan; `requestBleScanRuntimePermissions` runs before `startScan`.
+- **iOS** — Bluetooth permission and adapter state; **Open system settings** when the mesh guidance suggests it.
+- **Diagnostics** — **Copy mesh diagnostic report** / **Share mesh diagnostic** build the same plaintext (state + last import + digest buffer). Share writes a UTF-8 `.txt` in cache and opens the system share sheet (`expo-sharing`); falls back to `Share.share` when needed.
+- **Adaptive spacing** — On broadcast **failure**, spacing bumps to the **next higher** preset and **walk-down** mode is saved. Each **successful** send steps spacing **down one preset** until default/min; **manual** chip tap clears walk-down. See `meshInterChunkWalkdownPreference` and `nextLowerInterChunkPreset`.
 
 ## EMBER application envelope v1
 
@@ -56,7 +69,13 @@ Parsing is **best-effort**: bad magic, version, or length returns null / throws 
 |------|------|
 | `src/mesh/constants.ts` | GATT UUIDs and recommended MTU |
 | `src/mesh/streamFraming.ts` | Meshtastic stream framing helpers |
-| `src/mesh/meshtasticBleBridge.ts` | BLE manager, scan, connect, read/write, `monitorFromNum` |
+| `src/mesh/meshtasticBleBridge.ts` | BLE manager, scan, connect, read/write, `monitorFromNum`; **ToRadio** writes serialized with **4** best-effort attempts, **120 ms** × attempt backoff + **0–96 ms** jitter |
+| `docs/PLAN-FIELD-MESH-POLISH.md` | Checklist: field logs, onboarding, chunk presets / ATT retries |
+| `src/mesh/meshSettingsNavStore.ts` | Focus token so Mesh opens when Config is already focused |
+| `src/navigation/navigateToMeshSettings.ts` | Bump + `router.navigate` to Mesh Network |
+| `src/mesh/meshInterChunkWalkdownPreference.ts` | AsyncStorage flag for adaptive step-down after clean sends |
+| `src/mesh/meshDiagnosticExport.ts` | `buildMeshDiagnosticText` for clipboard + share |
+| `src/mesh/shareMeshDiagnostic.ts` | Cache `.txt` + `expo-sharing` share sheet |
 | `src/mesh/meshtasticCodec.ts` | Encode `ToRadio`, decode framed `FromRadio`, size guards |
 | `src/mesh/meshtasticSession.ts` | Handshake, drain, **`sendEmberMeshCiphertext`**, **`sendEmberMeshMessageUtf8`** |
 | `src/mesh/emberMeshConstants.ts` | **Portnum 270**, envelope / chunk sizes, timing |
@@ -66,7 +85,8 @@ Parsing is **best-effort**: bad magic, version, or length returns null / throws 
 | `src/mesh/emberMeshInbound.ts` | Extract EMBER frames from `FromRadio`, optional listener |
 | `src/mesh/communityFingerprint.ts` | SHA-256 fingerprint for envelope |
 | `src/mesh/meshRadioStore.ts` | Zustand store: BLE + session fields shared across screens |
-| `src/mesh/meshInterChunkDelayPreference.ts` | AsyncStorage presets for pause between chunked mesh sends |
+| `src/mesh/meshChunkDelayPresets.ts` | Chunk-spacing presets, clamp, **nextHigher** / **nextLower** preset helpers |
+| `src/mesh/meshInterChunkDelayPreference.ts` | AsyncStorage load/save for chunk pause; re-exports presets |
 | `src/hooks/useMeshInterChunkDelay.ts` | Load/save chunk spacing for broadcast hook |
 | `src/mesh/requestAndroidBleScanPermissions.ts` | Android runtime BLE scan/connect (or legacy location) before scan |
 | `src/sync/meshInboundMerge.ts` | Fingerprint check → decrypt Phase B bundle → `mergeMembersCheckInsPayload` |
@@ -97,6 +117,7 @@ Parsing is **best-effort**: bad magic, version, or length returns null / throws 
 - **“Bluetooth Off”** — Enable system Bluetooth; the Mesh screen explains this inline and offers **Open system settings** when it may help.
 - **Empty scan** — Radio must advertise the Meshtastic service UUID; put the device in a phone-Connectable / API mode per Meshtastic docs. Wrong LoRa region or firmware sleep can also hide the advertiser.
 - **Writes failing after rapid taps** — ToRadio writes are **queued** in `MeshtasticBleBridge`; disconnect sets a short **closing** window so overlapping sends fail fast with a clear error.
+- **Transient ATT errors on chunked send** — Each chunk’s `writeCharacteristicWithResponseForService` retries up to **four** times with increasing delay and small **random jitter** (spreads retries when multiple devices talk to the radio). If failures persist, increase **chunk spacing** (try **750 ms–1200 ms**) and reduce RF congestion.
 
 ## Tests
 

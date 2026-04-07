@@ -110,10 +110,16 @@ export class MeshtasticSession {
   async sendEmberMeshMessageUtf8(
     fingerprint16: Uint8Array,
     messageUtf8: Uint8Array,
-    options?: { interChunkDelayMs?: number }
+    options?: {
+      interChunkDelayMs?: number;
+      /** After each ToRadio write: 1-based index and total chunks (single-frame sends use 1/1). */
+      onChunkProgress?: (sentOneIndexed: number, totalChunks: number) => void;
+    }
   ): Promise<void> {
+    const progress = options?.onChunkProgress;
     if (messageUtf8.length <= EMBER_MESH_MAX_CIPHERTEXT) {
       await this.sendEmberMeshCiphertext(fingerprint16, messageUtf8);
+      progress?.(1, 1);
       return;
     }
     const inter =
@@ -132,6 +138,7 @@ export class MeshtasticSession {
       );
       const body = encodeEmberMeshWireBytesToRadio(wire);
       await this.bridge.writeToRadioProtobuf(body);
+      progress?.(i + 1, totalChunks);
       if (i + 1 < totalChunks && inter > 0) {
         await delayMs(inter);
       }

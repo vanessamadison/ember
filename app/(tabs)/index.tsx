@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { router } from 'expo-router';
+import { navigateToMeshSettings } from '../../src/navigation/navigateToMeshSettings';
 import {
   View,
   Text,
@@ -221,6 +221,10 @@ export default function HomeScreen() {
   const meshConnectedId = useMeshRadioStore((s) => s.connectedDeviceId);
   const meshNodeNum = useMeshRadioStore((s) => s.nodeNum);
   const meshInboundLast = useMeshRadioStore((s) => s.meshInboundLast);
+  const meshBroadcastProgress = useMeshRadioStore((s) => s.meshBroadcastProgress);
+  const meshLastBroadcastOutbound = useMeshRadioStore(
+    (s) => s.meshLastBroadcastOutbound
+  );
   const {
     broadcastBusy: meshBroadcastBusy,
     broadcastSnapshot: meshBroadcastSnapshot,
@@ -330,6 +334,25 @@ export default function HomeScreen() {
                 : `Last mesh import ${new Date(meshInboundLast.at).toLocaleString()}: ${meshInboundLast.reason}${meshInboundLast.detail ? ` — ${meshInboundLast.detail}` : ''}`}
             </Text>
           ) : null}
+          {meshBroadcastProgress ? (
+            <Text style={[styles.meshLabel, { marginTop: 6, color: '#fbbf24' }]}>
+              Sending LoRa frames: {meshBroadcastProgress.current} /{' '}
+              {meshBroadcastProgress.total}
+              {meshBroadcastProgress.total > 1 ? ' (chunked snapshot)' : ''}
+            </Text>
+          ) : null}
+          {meshLastBroadcastOutbound ? (
+            <Text style={[styles.meshLabel, { marginTop: 4 }]}>
+              Last mesh send:{' '}
+              {new Date(meshLastBroadcastOutbound.at).toLocaleString()} ·{' '}
+              {meshLastBroadcastOutbound.meshPackets} packet
+              {meshLastBroadcastOutbound.meshPackets === 1 ? '' : 's'} (
+              {meshLastBroadcastOutbound.bundleUtf8Bytes >= 1024
+                ? `${(meshLastBroadcastOutbound.bundleUtf8Bytes / 1024).toFixed(1)} KB`
+                : `${meshLastBroadcastOutbound.bundleUtf8Bytes} B`}{' '}
+              bundle on-air)
+            </Text>
+          ) : null}
           {mode === 'crisis' &&
           isOnboarded &&
           currentCommunityId &&
@@ -357,7 +380,9 @@ export default function HomeScreen() {
               >
                 <Text style={styles.meshCrisisButtonText}>
                   {meshBroadcastBusy
-                    ? 'Broadcasting snapshot…'
+                    ? meshBroadcastProgress
+                      ? `Broadcasting ${meshBroadcastProgress.current}/${meshBroadcastProgress.total}…`
+                      : 'Broadcasting snapshot…'
                     : 'Broadcast encrypted snapshot over mesh'}
                 </Text>
               </Pressable>
@@ -366,7 +391,7 @@ export default function HomeScreen() {
           <Pressable
             style={styles.meshConfigLink}
             onPress={() => {
-              router.push('/(tabs)/settings');
+              navigateToMeshSettings();
             }}
           >
             <Text style={styles.meshConfigLinkText}>

@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import {
   View,
   Text,
@@ -10,6 +11,7 @@ import {
   ActivityIndicator,
   Linking,
   Platform,
+  type LayoutChangeEvent,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as Clipboard from 'expo-clipboard';
@@ -37,8 +39,16 @@ import { digestFromRadioMessages } from '../../src/mesh/fromRadioSummary';
 import type { FromRadioMessage } from '../../src/mesh/meshtasticCodec';
 import { bleMeshGuidance, bleStateLabel } from '../../src/mesh/bleUserStrings';
 import { requestBleScanRuntimePermissions } from '../../src/mesh/requestAndroidBleScanPermissions';
+import { saveMeshInterChunkWalkdownActive } from '../../src/mesh/meshInterChunkWalkdownPreference';
+import { useMeshSettingsNavStore } from '../../src/mesh/meshSettingsNavStore';
+import {
+  buildMeshDiagnosticText,
+  type MeshDiagnosticInput,
+} from '../../src/mesh/meshDiagnosticExport';
+import { shareMeshDiagnosticText } from '../../src/mesh/shareMeshDiagnostic';
 
 const MESH_LOG_MAX_LINES = 14;
+const MESH_DIAG_EXPORT_MAX_LINES = 400;
 
 function trimMeshLog(text: string, maxLines = MESH_LOG_MAX_LINES): string {
   const lines = text.split('\n');
@@ -283,11 +293,19 @@ const styles = StyleSheet.create({
 });
 
 export default function SettingsScreen() {
+  const router = useRouter();
+  const params = useLocalSearchParams<{ section?: string }>();
+  const meshFocus = params.section === 'mesh';
+  const focusMeshToken = useMeshSettingsNavStore((s) => s.focusMeshToken);
+  const prevFocusMeshToken = useRef(0);
   const { userDisplayName, currentCommunityId, isOnboarded, userId } = useApp();
   const { communityName, members, inviteExpiresAt } = useCommunity();
+  const scrollRef = useRef<ScrollView | null>(null);
+  const meshDiagLinesRef = useRef<string[]>([]);
+  const [pendingMeshScroll, setPendingMeshScroll] = useState(meshFocus);
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
-    sync: true,
-    mesh: false,
+    sync: !meshFocus,
+    mesh: meshFocus,
   });
   const [syncBusy, setSyncBusy] = useState(false);
   const [importText, setImportText] = useState('');
@@ -305,6 +323,10 @@ export default function SettingsScreen() {
   const meshHandshakeBusy = useMeshRadioStore((s) => s.handshakeBusy);
   const meshNodeNum = useMeshRadioStore((s) => s.nodeNum);
   const meshInboundLast = useMeshRadioStore((s) => s.meshInboundLast);
+  const meshBroadcastProgress = useMeshRadioStore((s) => s.meshBroadcastProgress);
+  const meshLastBroadcastOutbound = useMeshRadioStore(
+    (s) => s.meshLastBroadcastOutbound
+  );
   const meshFromNumStopRef = useRef<(() => void) | null>(null);
   const [meshScanning, setMeshScanning] = useState(false);
   const [meshDevices, setMeshDevices] = useState<DiscoveredRadio[]>([]);
@@ -343,6 +365,10 @@ export default function SettingsScreen() {
     }
     const chunk = lines.join('\n');
     if (!chunk) return;
+    const asLines = chunk.split('\n').filter((l) => l.length > 0);
+    meshDiagLinesRef.current = [...meshDiagLinesRef.current, ...asLines].slice(
+      -MESH_DIAG_EXPORT_MAX_LINES
+    );
     setMeshProtoLog((prev) =>
       trimMeshLog(prev ? `${prev}\n${chunk}` : chunk)
     );
@@ -414,6 +440,41 @@ export default function SettingsScreen() {
     [meshBleState]
   );
 
+  useEffect(() => {
+    if (params.section === 'mesh') {
+      setExpandedSections((prev) => ({
+        ...prev,
+        mesh: true,
+        sync: false,
+      }));
+      setPendingMeshScroll(true);
+      requestAnimationFrame(() => {
+        try {
+          router.setParams({ section: '' });
+        } catch {
+          /* ignore */
+        }
+      });
+    }
+  }, [params.section, router]);
+
+  useEffect(() => {
+    if (focusMeshToken === prevFocusMeshToken.current) return;
+    prevFocusMeshToken.current = focusMeshToken;
+    if (focusMeshToken === 0) return;
+    setExpandedSections((prev) => ({
+      ...prev,
+      mesh: true,
+      sync: false,
+    }));
+    setPendingMeshScroll(true);
+  }, [focusMeshToken]);
+
+  const clearMeshDigestUi = () => {
+    meshDiagLinesRef.current = [];
+    setMeshProtoLog('');
+  };
+
   const toggles = {
     autoConnect: true,
     relayMode: false,
@@ -467,9 +528,61 @@ export default function SettingsScreen() {
     </View>
   );
 
+  const onMeshSectionLayout = (e: LayoutChangeEvent) => {
+    if (!pendingMeshScroll) return;
+    const y = e.nativeEvent.layout.y;
+    setPendingMeshScroll(false);
+    requestAnimationFrame(() => {
+      scrollRef.current?.scrollTo({ y: Math.max(0, y - 24), animated: true });
+    });
+  };
+
+  const meshDiagnosticInput = (): MeshDiagnosticInput => ({
+    digestLines: meshDiagLinesRef.current,
+    uiLogLineCap: MESH_LOG_MAX_LINES,
+    meshBleStateLabel: bleStateLabel(meshBleState),
+    platform: Platform.OS,
+    connectedDeviceId: meshConnectedId,
+    nodeNum: meshNodeNum,
+    interChunkDelayMs,
+    meshInboundLast,
+    meshLastBroadcastOutbound,
+    meshError,
+    meshLastTxHex,
+    meshInboundNote,
+  });
+
+  const copyMeshDiagnosticExport = async () => {
+    try {
+      const text = buildMeshDiagnosticText(meshDiagnosticInput());
+      await Clipboard.setStringAsync(text);
+      Alert.alert('Copied', 'Mesh diagnostic text is on the clipboard (attach to issues / field logs).');
+    } catch (err) {
+      Alert.alert(
+        'Copy failed',
+        err instanceof Error ? err.message : 'Unknown error'
+      );
+    }
+  };
+
+  const shareMeshDiagnosticExport = async () => {
+    try {
+      const text = buildMeshDiagnosticText(meshDiagnosticInput());
+      await shareMeshDiagnosticText(text);
+    } catch (err) {
+      Alert.alert(
+        'Share failed',
+        err instanceof Error ? err.message : 'Unknown error'
+      );
+    }
+  };
+
   return (
     <SafeAreaView style={styles.container}>
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView
+        ref={scrollRef}
+        contentContainerStyle={styles.content}
+      >
         <View style={styles.header}>
           <Text style={styles.title}>Settings</Text>
         </View>
@@ -709,7 +822,8 @@ export default function SettingsScreen() {
           </>
         )}
 
-        {/* Mesh Network */}
+        {/* Mesh Network — deep link: /(tabs)/settings?section=mesh */}
+        <View onLayout={onMeshSectionLayout} collapsable={false}>
         {renderSection(
           'Mesh Network',
           'mesh',
@@ -718,6 +832,16 @@ export default function SettingsScreen() {
               Meshtastic BLE: scan, connect, MTU 512, then want_config on ToRadio and decode FromRadio (official
               protobufs). FromNum notifications drain new mailbox data. Radio traffic is untrusted for EMBER crypto.
             </Text>
+            {meshNativeOk && meshBleState === 'PoweredOn' && meshApi ? (
+              <Text style={[styles.syncHelp, { marginTop: 8 }]}>
+                First-time pairing: tap Scan below and stay on this screen.{' '}
+                {Platform.OS === 'android'
+                  ? 'Accept Nearby devices / Bluetooth when Android asks — if you denied before, fix permissions in system App info for EMBER, then tap Refresh Bluetooth state.'
+                  : 'Allow Bluetooth for EMBER when iOS prompts; use Open system settings if Bluetooth stays unavailable.'}{' '}
+                Put the radio in phone/API connectable mode if the list stays empty. Pilot log template: repo doc
+                MESH-FIELD-TEST.md.
+              </Text>
+            ) : null}
             {!meshApi ? (
               <Text style={styles.syncHelp}>Initializing Bluetooth stack…</Text>
             ) : null}
@@ -819,6 +943,22 @@ export default function SettingsScreen() {
                   : `Mesh import ${new Date(meshInboundLast.at).toLocaleString()}: ${meshInboundLast.reason}${meshInboundLast.detail ? ` — ${meshInboundLast.detail}` : ''}`}
               </Text>
             ) : null}
+            <Pressable style={styles.syncButton} onPress={() => void copyMeshDiagnosticExport()}>
+              <Text style={styles.syncButtonText}>Copy mesh diagnostic report</Text>
+            </Pressable>
+            <Pressable
+              style={[styles.syncButton, styles.syncButtonPrimary]}
+              onPress={() => void shareMeshDiagnosticExport()}
+            >
+              <Text style={[styles.syncButtonText, styles.syncButtonTextDark]}>
+                Share mesh diagnostic…
+              </Text>
+            </Pressable>
+            <Text style={styles.syncHelp}>
+              Same plaintext as copy: Bluetooth, node id, chunk spacing, last import/errors, and up to{' '}
+              {MESH_DIAG_EXPORT_MAX_LINES} digest lines. Share saves a .txt and opens the system sheet (Mail,
+              Files, Drive); web falls back to the OS share dialog with message text.
+            </Text>
             <Pressable
               style={[
                 styles.syncButton,
@@ -912,7 +1052,7 @@ export default function SettingsScreen() {
                     session?.resetStream();
                     await b.disconnect();
                     useMeshRadioStore.getState().clearSessionFields();
-                    setMeshProtoLog('');
+                    clearMeshDigestUi();
                     setMeshLastTxHex(null);
                     setMeshInboundNote(null);
                   } catch (e) {
@@ -988,7 +1128,10 @@ export default function SettingsScreen() {
                 <Pressable
                   key={ms}
                   onPress={() => {
-                    void setInterChunkDelayMs(ms);
+                    void (async () => {
+                      await setInterChunkDelayMs(ms);
+                      await saveMeshInterChunkWalkdownActive(false);
+                    })();
                   }}
                   style={{
                     paddingVertical: 8,
@@ -1023,10 +1166,29 @@ export default function SettingsScreen() {
             >
               <Text style={styles.syncButtonText}>
                 {meshBroadcastBusy
-                  ? 'Broadcasting snapshot…'
+                  ? meshBroadcastProgress
+                    ? `Broadcasting ${meshBroadcastProgress.current}/${meshBroadcastProgress.total}…`
+                    : 'Broadcasting snapshot…'
                   : 'Broadcast encrypted snapshot over mesh'}
               </Text>
             </Pressable>
+            {meshBroadcastProgress ? (
+              <Text style={styles.syncHelp}>
+                LoRa frames written: {meshBroadcastProgress.current} /{' '}
+                {meshBroadcastProgress.total}
+                {meshBroadcastProgress.total > 1
+                  ? ' (pauses between frames use your chunk spacing)'
+                  : ''}
+              </Text>
+            ) : null}
+            {meshLastBroadcastOutbound ? (
+              <Text style={[styles.syncHelp, { color: '#a3a3a3' }]}>
+                Last mesh send:{' '}
+                {new Date(meshLastBroadcastOutbound.at).toLocaleString()} ·{' '}
+                {meshLastBroadcastOutbound.meshPackets} packet
+                {meshLastBroadcastOutbound.meshPackets === 1 ? '' : 's'} on-air
+              </Text>
+            ) : null}
             {meshDevices.map((d) => (
               <Pressable
                 key={d.id}
@@ -1037,7 +1199,7 @@ export default function SettingsScreen() {
                     if (!b || !meshNativeOk) return;
                     try {
                       setMeshError(null);
-                      setMeshProtoLog('');
+                      clearMeshDigestUi();
                       useMeshRadioStore.getState().setNodeNum(null);
                       useMeshRadioStore.getState().setConnectedDeviceId(null);
                       setMeshLastTxHex(null);
@@ -1076,6 +1238,7 @@ export default function SettingsScreen() {
             ))}
           </>
         )}
+        </View>
 
         {/* Notifications */}
         {renderSection(

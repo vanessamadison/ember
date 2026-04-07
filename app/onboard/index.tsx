@@ -7,6 +7,7 @@ import {
   StyleSheet,
   ScrollView,
   TextInput,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -163,11 +164,20 @@ export default function OnboardWelcomeScreen() {
           <View style={[styles.cardSection, { marginTop: 16 }]}>
             <Text style={styles.cardTitle}>LoRa mesh radios (Tier 2)</Text>
             <Text style={styles.cardText}>
-              Pairing Meshtastic-style hardware uses Bluetooth in a native dev
-              or store build (not Expo Go). After you finish onboarding, open
-              Settings → Mesh Network, grant Bluetooth / Nearby devices when
-              asked, then scan for your radio. Cellular service and mesh radio
-              are different links — both are shown honestly in the app.
+              1. Use a native dev or release build (Expo Go cannot use BLE).{'\n'}
+              2. After onboarding, open the Config tab → Mesh Network.{'\n'}
+              3. Turn on system Bluetooth, tap Refresh Bluetooth state if needed, then
+              Scan for Meshtastic radios.{'\n'}
+              4.{' '}
+              {Platform.OS === 'android'
+                ? 'Android: the first scan may prompt for Nearby devices / Bluetooth — allow it. If you denied, fix it in App info → EMBER → Permissions, then refresh Bluetooth state in EMBER.'
+                : 'iOS: allow Bluetooth access when prompted; you can also use Open system settings on the Mesh Network screen.'}
+              {'\n'}
+              5. In crisis mode, Config is hidden from the tab bar — use Status (home) to open Config, then Mesh Network.
+              {'\n'}
+              6. From the main dashboard, the Config link opens Mesh Network directly (deep link).
+              {'\n\n'}
+              Cellular and LoRa mesh are different links; the app keeps that distinction clear.
             </Text>
           </View>
         </View>

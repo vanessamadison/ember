@@ -35,6 +35,8 @@ export async function meshBroadcastSnapshotFlow(
     onTxPreview?: (preview: string) => void;
     /** Pause between chunked v2 frames (Settings-tunable). */
     interChunkDelayMs?: number;
+    /** After each ToRadio chunk write (1-based index, total). */
+    onChunkProgress?: (sentOneIndexed: number, totalChunks: number) => void;
   }
 ): Promise<MeshBroadcastSnapshotResult> {
   const bundleB64 = await buildEncryptedMembersCheckInsBundle(communityId);
@@ -67,6 +69,7 @@ export async function meshBroadcastSnapshotFlow(
   }
   await session.sendEmberMeshMessageUtf8(fp, utf8, {
     interChunkDelayMs: options?.interChunkDelayMs,
+    onChunkProgress: options?.onChunkProgress,
   });
   return { ok: true, meshPackets: chunks, bundleUtf8Bytes: utf8.length };
 }

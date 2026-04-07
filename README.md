@@ -158,6 +158,7 @@ eas submit --platform android
 
 | Doc | Purpose |
 |-----|---------|
+| [docs/CHANGELOG.md](docs/CHANGELOG.md) | Notable changes (mesh UX, diagnostics, deps) — useful for commits / PRs |
 | [docs/MVP-GUIDE.md](docs/MVP-GUIDE.md) | MVP vs three-tier plan, deployment vs funding gaps, phased roadmap |
 | [docs/THREAT-MODEL-MATRIX.md](docs/THREAT-MODEL-MATRIX.md) | Tier-aware threats, controls, owners, pilot metrics |
 | [docs/MVP-DEPLOY.md](docs/MVP-DEPLOY.md) | EAS builds, TestFlight / Play internal, env notes |
@@ -165,6 +166,7 @@ eas submit --platform android
 | [docs/MESHTASTIC-BLE.md](docs/MESHTASTIC-BLE.md) | Meshtastic BLE + protobuf handshake (Tier 2 bring-up) |
 | [docs/PLAN-MESH-TIER2-ROLLOUT.md](docs/PLAN-MESH-TIER2-ROLLOUT.md) | Phased plan: mesh app layer, BLE UX, robustness, CI, crisis UI |
 | [docs/MESH-FIELD-TEST.md](docs/MESH-FIELD-TEST.md) | Two-device mesh + LoRa field test runbook |
+| [docs/PLAN-FIELD-MESH-POLISH.md](docs/PLAN-FIELD-MESH-POLISH.md) | Field logs, BLE onboarding polish, mesh reliability tweaks |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Technical specification |
 
 ## Project Structure
@@ -187,6 +189,7 @@ ember/
 │       ├── plans.tsx             # Emergency plans
 │       └── settings.tsx          # Configuration
 ├── src/
+│   ├── navigation/               # e.g. navigateToMeshSettings (deep link + focus bump)
 │   ├── components/               # Reusable UI (12 components)
 │   ├── db/                       # WatermelonDB layer
 │   │   ├── schema.ts             # Database schema (8 tables)
@@ -209,6 +212,7 @@ ember/
 │   └── utils/                    # Utility functions
 ├── assets/                       # Logo, splash, icons
 ├── docs/
+│   ├── CHANGELOG.md              # Notable changes (see table above)
 │   └── ARCHITECTURE.md           # Full technical specification
 ├── package.json
 ├── app.json                      # Expo config

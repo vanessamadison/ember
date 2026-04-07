@@ -2,6 +2,8 @@
 
 Hands-on validation for **Meshtastic BLE + EMBER Phase B sync** over the air. Use a **native dev or release build** (not Expo Go). See [MESHTASTIC-BLE.md](./MESHTASTIC-BLE.md) for architecture.
 
+**Improvement plan (logs, onboarding, reliability):** [PLAN-FIELD-MESH-POLISH.md](./PLAN-FIELD-MESH-POLISH.md).
+
 ## Roles
 
 | Role | Hardware | App |
@@ -55,7 +57,7 @@ You can use **one** radio tethered to A and B in range over LoRa only if you mec
 | Broadcast fails fast | **Unlock encryption**; valid `currentCommunityId`; MTU/connect stability |
 | B never imports | LoRa channel mismatch; B not in mesh RF range; assembly TTL expired between chunks |
 | Import red line | Passphrase mismatch, corrupted payload, or DB constraints (see message detail) |
-| Drops mid-broadcast | Config → Mesh: try higher **chunk spacing** (100→300–750 ms); ToRadio retries are automatic (3×) |
+| Drops mid-broadcast | Config → Mesh: try higher **chunk spacing** (e.g. 300→750→1000–1200 ms presets); each ToRadio write retries up to **4×** with backoff + jitter (see [MESHTASTIC-BLE.md](./MESHTASTIC-BLE.md)) |
 
 ## Regression (CI)
 
@@ -69,4 +71,40 @@ Copy printed arrays into `__tests__/mesh/fixtures/wireGolden.ts` when protobufs 
 
 ## Record results
 
-Log: date, firmware versions, A/B device OS, **pass/fail** per criterion, and any error strings from **Last mesh import** or alerts. Attach if filing an issue.
+Paste one block per run (copy below into an issue, pilot spreadsheet, or `docs/field-logs/`). See also [PLAN-FIELD-MESH-POLISH.md](./PLAN-FIELD-MESH-POLISH.md).
+
+### Run log template (copy-paste)
+
+```
+### EMBER mesh field run — <YYYY-MM-DD> — <pilot name or id>
+
+**Build:** (e.g. EAS profile, git sha, platform)
+**EMBER app:** version / commit
+**Radio A:** model, Meshtastic FW version, region, modem preset / channel name
+**Radio B:** (same fields)
+**Phone A:** OS version, model
+**Phone B:** OS version, model
+
+**Chunk spacing (sender):** ___ ms  (Settings → Mesh Network chips)
+
+**Procedure:** (brief: single vs multi-chunk send, distance, obstacles)
+
+| Criterion        | Pass? | Notes |
+|------------------|-------|-------|
+| Pairing A/B      | Y/N   |       |
+| Broadcast send   | Y/N   | Mesh snapshot sent? Alerts/errors text |
+| Receive / merge  | Y/N   | Last mesh import line (paste) |
+| Data visible on B| Y/N   | What changed verified |
+
+**Last mesh import (B):** (paste exact line or “none”)
+
+**Alerts / errors:** (Mesh broadcast failed, permission, etc.)
+
+**Diagnostics:** Paste **Copy mesh diagnostic report** or attach the **Share mesh diagnostic** `.txt` from Config → Mesh Network (both phones if relevant).
+
+**Free text:** what helped (e.g. raised spacing to 750 ms; retries observed; adaptive auto-bump after failed send)
+```
+
+### Minimum viable log
+
+If the full table is too much, capture at least: **date**, **both FW versions**, **chunk spacing**, **pass/fail** for broadcast + receive, and **verbatim** Last mesh import or error strings. Attach photos of radio screens only if needed for channel proofs.
