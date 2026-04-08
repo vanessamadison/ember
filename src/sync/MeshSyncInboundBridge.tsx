@@ -22,6 +22,9 @@ export function MeshSyncInboundBridge() {
               ok: true,
               membersInserted: r.membersInserted,
               checkInsInserted: r.checkInsInserted,
+              emergencyPlansInserted: r.emergencyPlansInserted,
+              messagesInserted: r.messagesInserted,
+              drillsInserted: r.drillsInserted,
             });
           } else if (
             r.reason !== 'fingerprint_mismatch' &&

@@ -6,21 +6,39 @@ import type Community from '../db/models/Community';
 import type Member from '../db/models/Member';
 import type CheckIn from '../db/models/CheckIn';
 import type Resource from '../db/models/Resource';
+import type EmergencyPlan from '../db/models/EmergencyPlan';
+import type Message from '../db/models/Message';
+import type Drill from '../db/models/Drill';
 import {
-  MEMBERS_CHECK_INS_BUNDLE_VERSION,
-  type MembersCheckInsPayloadV1,
-  isMembersCheckInsPayloadV1,
+  PHASE_B_BUNDLE_VERSION,
+  type PhaseBSyncPayloadV2,
+  isPhaseBSyncPayload,
+  type PhaseBSyncPayload,
 } from './types';
 import {
   ensureCheckInSyncIdsForCommunity,
   ensureMemberPublicIdsForCommunity,
   ensureResourcePublicIdsForCommunity,
+  ensureEmergencyPlanPublicIdsForCommunity,
+  ensureMessagePublicIdsForCommunity,
+  ensureDrillPublicIdsForCommunity,
+  ensureDrillLastUpdatedForCommunity,
 } from './ensureIds';
 import { EMBER_MESH_MAX_CIPHERTEXT } from '../mesh/emberMeshConstants';
 
 const MAX_CHECK_INS_PER_BUNDLE = 500;
+const MAX_MESSAGES_PER_BUNDLE = 500;
 
-function assertPayloadIds(payload: MembersCheckInsPayloadV1): void {
+export type BuildPhaseBSyncOptions = {
+  checkInsLimit: number;
+  includeResources: boolean;
+  includeEmergencyPlans: boolean;
+  includeMessages: boolean;
+  messagesLimit: number;
+  includeDrills: boolean;
+};
+
+function assertPayloadIds(payload: PhaseBSyncPayloadV2): void {
   const badMember = payload.members.find((m) => !m.publicId);
   if (badMember) {
     throw new Error('Member missing public_id after ensure; database may be corrupted.');
@@ -29,12 +47,24 @@ function assertPayloadIds(payload: MembersCheckInsPayloadV1): void {
   if (badRes) {
     throw new Error('Resource missing public_id after ensure; database may be corrupted.');
   }
+  const badPlan = payload.emergencyPlans?.find((p) => !p.publicId);
+  if (badPlan) {
+    throw new Error('Emergency plan missing public_id after ensure; database may be corrupted.');
+  }
+  const badMsg = payload.messages?.find((m) => !m.publicId);
+  if (badMsg) {
+    throw new Error('Message missing public_id after ensure; database may be corrupted.');
+  }
+  const badDrill = payload.drills?.find((d) => !d.publicId);
+  if (badDrill) {
+    throw new Error('Drill missing public_id after ensure; database may be corrupted.');
+  }
 }
 
-async function buildMembersCheckInsPayloadV1(
+async function buildPhaseBSyncPayloadV2(
   communityId: string,
-  options: { checkInsLimit: number; includeResources: boolean }
-): Promise<MembersCheckInsPayloadV1> {
+  options: BuildPhaseBSyncOptions
+): Promise<PhaseBSyncPayloadV2> {
   const community = await database
     .get<Community>('communities')
     .find(communityId)
@@ -53,6 +83,21 @@ async function buildMembersCheckInsPayloadV1(
     .query(Q.where('community_id', communityId))
     .fetch();
 
+  const planRows = await database
+    .get<EmergencyPlan>('emergency_plans')
+    .query(Q.where('community_id', communityId))
+    .fetch();
+
+  const messageRows = await database
+    .get<Message>('messages')
+    .query(Q.where('community_id', communityId))
+    .fetch();
+
+  const drillRows = await database
+    .get<Drill>('drills')
+    .query(Q.where('community_id', communityId))
+    .fetch();
+
   const checkRows = await database
     .get<CheckIn>('check_ins')
     .query(Q.where('community_id', communityId))
@@ -61,10 +106,18 @@ async function buildMembersCheckInsPayloadV1(
     .sort((a, b) => b.timestamp - a.timestamp)
     .slice(0, options.checkInsLimit);
 
+  const messagesSorted = [...messageRows].sort((a, b) => b.timestamp - a.timestamp);
+  const messagesSlice = options.includeMessages
+    ? messagesSorted.slice(
+        0,
+        Math.min(options.messagesLimit, MAX_MESSAGES_PER_BUNDLE)
+      )
+    : [];
+
   const inviteCode = normalizeInviteCode(community.inviteCode);
 
-  const payload: MembersCheckInsPayloadV1 = {
-    v: MEMBERS_CHECK_INS_BUNDLE_VERSION,
+  const payload: PhaseBSyncPayloadV2 = {
+    v: PHASE_B_BUNDLE_VERSION,
     inviteCode,
     issuedAt: Date.now(),
     members: members.map((m) => ({
@@ -81,7 +134,7 @@ async function buildMembersCheckInsPayloadV1(
     })),
     checkIns: checkIns
       .map((c) => {
-        const member = members.find((m) => m.id === c.memberId);
+        const member = members.find((mm) => mm.id === c.memberId);
         const memberPublicId = member?.publicId?.trim() || '';
         return {
           syncId: c.syncId?.trim() || '',
@@ -112,6 +165,53 @@ async function buildMembersCheckInsPayloadV1(
           }),
         }
       : {}),
+    ...(options.includeEmergencyPlans
+      ? {
+          emergencyPlans: planRows.map((p) => ({
+            publicId: p.publicId?.trim() || '',
+            name: p.name,
+            planType: p.planType,
+            contentEncrypted: p.contentEncrypted,
+            sizeBytes: p.sizeBytes,
+            status: p.status as 'current' | 'needs_review',
+            lastUpdated: p.lastUpdated,
+          })),
+        }
+      : {}),
+    ...(options.includeMessages && messagesSlice.length > 0
+      ? {
+          messages: messagesSlice.map((msg) => {
+            const sender = members.find((m) => m.id === msg.senderId);
+            return {
+              publicId: msg.publicId?.trim() || '',
+              senderMemberPublicId: sender?.publicId?.trim() || '',
+              senderName: msg.senderName,
+              textEncrypted: msg.textEncrypted,
+              messageType: msg.messageType,
+              timestamp: msg.timestamp,
+              isMesh: msg.isMesh,
+              delivered: msg.delivered,
+            };
+          }).filter((m) => m.publicId && m.senderMemberPublicId),
+        }
+      : {}),
+    ...(options.includeDrills
+      ? {
+          drills: drillRows.map((d) => ({
+            publicId: d.publicId?.trim() || '',
+            name: d.name,
+            description: d.description,
+            difficulty: d.difficulty,
+            estimatedTime: d.estimatedTime,
+            icon: d.icon,
+            xpReward: d.xpReward,
+            isCompleted: d.isCompleted,
+            score: d.score,
+            completedAt: d.completedAt,
+            lastUpdated: d.lastUpdated ?? Math.max(d.completedAt, 0),
+          })),
+        }
+      : {}),
     ...(typeof community.inviteExpiresAt === 'number' &&
     community.inviteExpiresAt > 0
       ? { communityInviteExpiresAt: community.inviteExpiresAt }
@@ -133,10 +233,18 @@ export async function buildEncryptedMembersCheckInsBundle(
   await ensureMemberPublicIdsForCommunity(communityId);
   await ensureCheckInSyncIdsForCommunity(communityId);
   await ensureResourcePublicIdsForCommunity(communityId);
+  await ensureEmergencyPlanPublicIdsForCommunity(communityId);
+  await ensureMessagePublicIdsForCommunity(communityId);
+  await ensureDrillPublicIdsForCommunity(communityId);
+  await ensureDrillLastUpdatedForCommunity(communityId);
 
-  const payload = await buildMembersCheckInsPayloadV1(communityId, {
+  const payload = await buildPhaseBSyncPayloadV2(communityId, {
     checkInsLimit: MAX_CHECK_INS_PER_BUNDLE,
     includeResources: true,
+    includeEmergencyPlans: true,
+    includeMessages: true,
+    messagesLimit: MAX_MESSAGES_PER_BUNDLE,
+    includeDrills: true,
   });
   assertPayloadIds(payload);
 
@@ -145,7 +253,7 @@ export async function buildEncryptedMembersCheckInsBundle(
 
 /**
  * Same encryption as relay/sneaker bundles, trimmed until UTF-8 ciphertext fits
- * {@link EMBER_MESH_MAX_CIPHERTEXT} (one Meshtastic frame). Drops resources first, then check-ins one-by-one.
+ * {@link EMBER_MESH_MAX_CIPHERTEXT} (one Meshtastic frame). Drops messages/plans/drills/resources/check-ins in order.
  */
 export async function buildEncryptedMembersCheckInsBundleForMesh(
   communityId: string
@@ -158,6 +266,10 @@ export async function buildEncryptedMembersCheckInsBundleForMesh(
   await ensureMemberPublicIdsForCommunity(communityId);
   await ensureCheckInSyncIdsForCommunity(communityId);
   await ensureResourcePublicIdsForCommunity(communityId);
+  await ensureEmergencyPlanPublicIdsForCommunity(communityId);
+  await ensureMessagePublicIdsForCommunity(communityId);
+  await ensureDrillPublicIdsForCommunity(communityId);
+  await ensureDrillLastUpdatedForCommunity(communityId);
 
   const checkRows = await database
     .get<CheckIn>('check_ins')
@@ -166,17 +278,42 @@ export async function buildEncryptedMembersCheckInsBundleForMesh(
   const maxChecks = Math.min(checkRows.length, MAX_CHECK_INS_PER_BUNDLE);
 
   let useResources = true;
+  let usePlans = true;
+  let useDrills = true;
+  let useMessages = true;
+  let msgLimit = MAX_MESSAGES_PER_BUNDLE;
   let n = maxChecks;
 
-  for (let attempt = 0; attempt < 800; attempt++) {
-    const payload = await buildMembersCheckInsPayloadV1(communityId, {
+  for (let attempt = 0; attempt < 2000; attempt++) {
+    const payload = await buildPhaseBSyncPayloadV2(communityId, {
       checkInsLimit: n,
       includeResources: useResources,
+      includeEmergencyPlans: usePlans,
+      includeMessages: useMessages,
+      messagesLimit: msgLimit,
+      includeDrills: useDrills,
     });
     assertPayloadIds(payload);
     const b64 = mgr.encryptString(JSON.stringify(payload));
     if (new TextEncoder().encode(b64).length <= EMBER_MESH_MAX_CIPHERTEXT) {
       return b64;
+    }
+    if (msgLimit > 0) {
+      msgLimit -= 1;
+      continue;
+    }
+    if (useMessages) {
+      useMessages = false;
+      msgLimit = MAX_MESSAGES_PER_BUNDLE;
+      continue;
+    }
+    if (usePlans) {
+      usePlans = false;
+      continue;
+    }
+    if (useDrills) {
+      useDrills = false;
+      continue;
     }
     if (useResources) {
       useResources = false;
@@ -196,14 +333,14 @@ export async function buildEncryptedMembersCheckInsBundleForMesh(
 
 export function decryptMembersCheckInsBundleJson(
   ciphertextBase64: string
-): MembersCheckInsPayloadV1 {
+): PhaseBSyncPayload {
   const mgr = getCryptoSession();
   if (!mgr?.isInitialized()) {
     throw new Error('Unlock encryption before importing a bundle.');
   }
   const json = mgr.decryptString(ciphertextBase64);
   const data: unknown = JSON.parse(json);
-  if (!isMembersCheckInsPayloadV1(data)) {
+  if (!isPhaseBSyncPayload(data)) {
     throw new Error('Invalid or unsupported bundle payload.');
   }
   if (data.inviteCode !== normalizeInviteCode(data.inviteCode)) {

@@ -42,7 +42,7 @@ export function buildMeshDiagnosticText(input: MeshDiagnosticInput): string {
     `Radio node num: ${nodeNum != null ? String(nodeNum) : '(none)'}`,
     `Chunk spacing (ms): ${interChunkDelayMs}`,
     meshInboundLast
-      ? `Last mesh import: ${meshInboundLast.ok ? 'ok' : 'fail'} at ${new Date(meshInboundLast.at).toISOString()}${meshInboundLast.ok ? ` +${meshInboundLast.membersInserted} members, +${meshInboundLast.checkInsInserted} check-ins` : ` ${meshInboundLast.reason}${meshInboundLast.detail ? ` — ${meshInboundLast.detail}` : ''}`}`
+      ? `Last mesh import: ${meshInboundLast.ok ? 'ok' : 'fail'} at ${new Date(meshInboundLast.at).toISOString()}${meshInboundLast.ok ? ` +${meshInboundLast.membersInserted} members, +${meshInboundLast.checkInsInserted} check-ins, +${meshInboundLast.emergencyPlansInserted} plans, +${meshInboundLast.messagesInserted} messages, +${meshInboundLast.drillsInserted} drills` : ` ${meshInboundLast.reason}${meshInboundLast.detail ? ` — ${meshInboundLast.detail}` : ''}`}`
       : 'Last mesh import: (none)',
     meshLastBroadcastOutbound
       ? `Last mesh send (outbound): ${new Date(meshLastBroadcastOutbound.at).toISOString()} · ${meshLastBroadcastOutbound.meshPackets} packets · ${meshLastBroadcastOutbound.bundleUtf8Bytes} B bundle utf8`

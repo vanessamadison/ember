@@ -39,6 +39,7 @@ import { digestFromRadioMessages } from '../../src/mesh/fromRadioSummary';
 import type { FromRadioMessage } from '../../src/mesh/meshtasticCodec';
 import { bleMeshGuidance, bleStateLabel } from '../../src/mesh/bleUserStrings';
 import { requestBleScanRuntimePermissions } from '../../src/mesh/requestAndroidBleScanPermissions';
+import { runBleScanPreflight } from '../../src/mesh/meshBleScanPreflight';
 import { saveMeshInterChunkWalkdownActive } from '../../src/mesh/meshInterChunkWalkdownPreference';
 import { useMeshSettingsNavStore } from '../../src/mesh/meshSettingsNavStore';
 import {
@@ -46,6 +47,7 @@ import {
   type MeshDiagnosticInput,
 } from '../../src/mesh/meshDiagnosticExport';
 import { shareMeshDiagnosticText } from '../../src/mesh/shareMeshDiagnostic';
+import MeshSecurityChecklist from '../../src/components/MeshSecurityChecklist';
 
 const MESH_LOG_MAX_LINES = 14;
 const MESH_DIAG_EXPORT_MAX_LINES = 400;
@@ -635,7 +637,7 @@ export default function SettingsScreen() {
                     Alert.alert(
                       'Relay sync',
                       r.pulled
-                        ? `Merged remote snapshot, then pushed. New members: ${r.merge?.membersInserted ?? 0}, check-ins: ${r.merge?.checkInsInserted ?? 0}`
+                        ? `Merged remote snapshot, then pushed. New members: ${r.merge?.membersInserted ?? 0}, check-ins: ${r.merge?.checkInsInserted ?? 0}, plans: ${r.merge?.emergencyPlansInserted ?? 0}, messages: ${r.merge?.messagesInserted ?? 0}, drills: ${r.merge?.drillsInserted ?? 0}`
                         : 'No remote bundle yet; pushed local snapshot.'
                     );
                   } catch (e) {
@@ -716,7 +718,7 @@ export default function SettingsScreen() {
                     setImportText('');
                     Alert.alert(
                       'Import complete',
-                      `Members +${r.membersInserted}, check-ins +${r.checkInsInserted}`
+                      `Members +${r.membersInserted}, check-ins +${r.checkInsInserted}, plans +${r.emergencyPlansInserted}, messages +${r.messagesInserted}, drills +${r.drillsInserted}`
                     );
                   } catch (e) {
                     Alert.alert(
@@ -832,6 +834,7 @@ export default function SettingsScreen() {
               Meshtastic BLE: scan, connect, MTU 512, then want_config on ToRadio and decode FromRadio (official
               protobufs). FromNum notifications drain new mailbox data. Radio traffic is untrusted for EMBER crypto.
             </Text>
+            <MeshSecurityChecklist />
             {meshNativeOk && meshBleState === 'PoweredOn' && meshApi ? (
               <Text style={[styles.syncHelp, { marginTop: 8 }]}>
                 First-time pairing: tap Scan below and stay on this screen.{' '}
@@ -939,7 +942,7 @@ export default function SettingsScreen() {
                 ]}
               >
                 {meshInboundLast.ok
-                  ? `Mesh import ${new Date(meshInboundLast.at).toLocaleString()}: +${meshInboundLast.membersInserted} members, +${meshInboundLast.checkInsInserted} check-ins`
+                  ? `Mesh import ${new Date(meshInboundLast.at).toLocaleString()}: +${meshInboundLast.membersInserted} members, +${meshInboundLast.checkInsInserted} check-ins, +${meshInboundLast.emergencyPlansInserted} plans, +${meshInboundLast.messagesInserted} messages, +${meshInboundLast.drillsInserted} drills`
                   : `Mesh import ${new Date(meshInboundLast.at).toLocaleString()}: ${meshInboundLast.reason}${meshInboundLast.detail ? ` — ${meshInboundLast.detail}` : ''}`}
               </Text>
             ) : null}
@@ -964,58 +967,50 @@ export default function SettingsScreen() {
                 styles.syncButton,
                 {
                   opacity:
-                    !meshApi ||
-                    meshBleState !== 'PoweredOn' ||
-                    !meshNativeOk ||
-                    meshScanning
-                      ? 0.45
-                      : 1,
+                    !meshApi || !meshNativeOk || meshScanning ? 0.45 : 1,
                 },
               ]}
-              disabled={
-                !meshApi ||
-                meshBleState !== 'PoweredOn' ||
-                !meshNativeOk ||
-                meshScanning
-              }
+              disabled={!meshApi || !meshNativeOk || meshScanning}
               onPress={() => {
-                void (async () => {
-                  const b = meshApi?.bridge;
-                  if (!b || !meshNativeOk) return;
-                  setMeshError(null);
-                  if (Platform.OS === 'android') {
-                    const perm = await requestBleScanRuntimePermissions();
-                    if (!perm.ok) {
-                      setMeshError(
-                        perm.denied
-                          ? 'Bluetooth permission denied. Allow Nearby devices / Bluetooth for EMBER in system settings, then tap Refresh Bluetooth state.'
-                          : 'Could not obtain Bluetooth permission for scan.'
-                      );
-                      return;
+                const b = meshApi?.bridge;
+                if (!b || !meshNativeOk) return;
+                runBleScanPreflight(meshBleState, () => {
+                  void (async () => {
+                    setMeshError(null);
+                    if (Platform.OS === 'android') {
+                      const perm = await requestBleScanRuntimePermissions();
+                      if (!perm.ok) {
+                        setMeshError(
+                          perm.denied
+                            ? 'Bluetooth permission denied. Allow Nearby devices / Bluetooth for EMBER in system settings, then tap Refresh Bluetooth state.'
+                            : 'Could not obtain Bluetooth permission for scan.'
+                        );
+                        return;
+                      }
+                      try {
+                        const s = await b.getBluetoothState();
+                        useMeshRadioStore.getState().setBleState(s);
+                      } catch {
+                        /* ignore refresh errors; scan may still work */
+                      }
                     }
-                    try {
-                      const s = await b.getBluetoothState();
-                      useMeshRadioStore.getState().setBleState(s);
-                    } catch {
-                      /* ignore refresh errors; scan may still work */
-                    }
-                  }
-                  setMeshDevices([]);
-                  setMeshScanning(true);
-                  b.startScan(
-                    (d) => {
-                      setMeshDevices((prev) => {
-                        if (prev.some((x) => x.id === d.id)) return prev;
-                        return [...prev, d];
-                      });
-                    },
-                    (err) => {
-                      setMeshError(err.message);
-                      b.stopScan();
-                      setMeshScanning(false);
-                    }
-                  );
-                })();
+                    setMeshDevices([]);
+                    setMeshScanning(true);
+                    b.startScan(
+                      (d) => {
+                        setMeshDevices((prev) => {
+                          if (prev.some((x) => x.id === d.id)) return prev;
+                          return [...prev, d];
+                        });
+                      },
+                      (err) => {
+                        setMeshError(err.message);
+                        b.stopScan();
+                        setMeshScanning(false);
+                      }
+                    );
+                  })();
+                });
               }}
             >
               <Text style={styles.syncButtonText}>

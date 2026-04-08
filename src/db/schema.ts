@@ -2,7 +2,7 @@ import { appSchema, tableSchema } from '@nozbe/watermelondb';
 import { schemaMigrations, addColumns } from '@nozbe/watermelondb/Schema/migrations';
 
 export const schema = appSchema({
-  version: 5,
+  version: 7,
   tables: [
     tableSchema({
       name: 'communities',
@@ -75,6 +75,8 @@ export const schema = appSchema({
         { name: 'is_completed', type: 'boolean' },
         { name: 'score', type: 'number' },
         { name: 'completed_at', type: 'number' },
+        { name: 'public_id', type: 'string', isOptional: true },
+        { name: 'last_updated', type: 'number', isOptional: true },
       ],
     }),
     tableSchema({
@@ -87,6 +89,7 @@ export const schema = appSchema({
         { name: 'size_bytes', type: 'number' },
         { name: 'status', type: 'string' },
         { name: 'last_updated', type: 'number' },
+        { name: 'public_id', type: 'string', isOptional: true },
       ],
     }),
     tableSchema({
@@ -100,6 +103,7 @@ export const schema = appSchema({
         { name: 'timestamp', type: 'number' },
         { name: 'is_mesh', type: 'boolean' },
         { name: 'delivered', type: 'boolean' },
+        { name: 'public_id', type: 'string', isOptional: true },
       ],
     }),
     tableSchema({
@@ -159,6 +163,31 @@ export const migrations = schemaMigrations({
         addColumns({
           table: 'resources',
           columns: [{ name: 'public_id', type: 'string', isOptional: true }],
+        }),
+      ],
+    },
+    {
+      toVersion: 6,
+      steps: [
+        addColumns({
+          table: 'emergency_plans',
+          columns: [{ name: 'public_id', type: 'string', isOptional: true }],
+        }),
+        addColumns({
+          table: 'messages',
+          columns: [{ name: 'public_id', type: 'string', isOptional: true }],
+        }),
+      ],
+    },
+    {
+      toVersion: 7,
+      steps: [
+        addColumns({
+          table: 'drills',
+          columns: [
+            { name: 'public_id', type: 'string', isOptional: true },
+            { name: 'last_updated', type: 'number', isOptional: true },
+          ],
         }),
       ],
     },

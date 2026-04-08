@@ -59,7 +59,7 @@ Keep secrets out of git: use EAS [environment variables](https://docs.expo.dev/e
 
 - Passphrase verification uses a **SHA-256 hash** stored on the community record; this is suitable for a local gate, **not** a replacement for a server-side secret store in a multi-tenant cloud backend.
 - Community **KDF salt** is stored per community (`derivation_salt`); derived keys are cached with **`expo-secure-store`** after unlock.
-- Mesh and cross-device sync are **not** part of this MVP path; treat data as **device-local** until replication is implemented.
+- **Cross-device sync** (Phase B) and **Meshtastic BLE mesh** are implemented for **native builds** — see [PHASE-B-SYNC.md](./PHASE-B-SYNC.md), [MESHTASTIC-BLE.md](./MESHTASTIC-BLE.md), and [MESH-FIELD-TEST.md](./MESH-FIELD-TEST.md). Treat mesh as **prototype** until your pilots pass documented criteria; Meshtastic **channel keys** are configured outside EMBER ([MESHTASTIC-NODE-SECURITY.md](./MESHTASTIC-NODE-SECURITY.md)).
 
 ## Optional: seed data
 

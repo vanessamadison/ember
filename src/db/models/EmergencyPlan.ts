@@ -27,5 +27,7 @@ export default class EmergencyPlan extends Model {
 
   @field('last_updated') lastUpdated!: number;
 
+  @text('public_id') publicId?: string;
+
   @relation('community', 'community_id') community!: any;
 }

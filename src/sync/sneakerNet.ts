@@ -2,7 +2,7 @@ import {
   buildEncryptedMembersCheckInsBundle,
   decryptMembersCheckInsBundleJson,
 } from './snapshot';
-import { mergeMembersCheckInsPayload } from './merge';
+import { mergeMembersCheckInsPayload, type MergePhaseBResult } from './merge';
 
 export async function exportMembersCheckInsSneakerBase64(
   communityId: string
@@ -12,11 +12,7 @@ export async function exportMembersCheckInsSneakerBase64(
 
 export async function importMembersCheckInsSneakerBase64(
   ciphertextBase64: string
-): Promise<{
-  localCommunityId: string;
-  membersInserted: number;
-  checkInsInserted: number;
-}> {
+): Promise<MergePhaseBResult> {
   const trimmed = ciphertextBase64.trim();
   const payload = decryptMembersCheckInsBundleJson(trimmed);
   return mergeMembersCheckInsPayload(payload);

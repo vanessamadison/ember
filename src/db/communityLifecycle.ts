@@ -1,6 +1,13 @@
 import { Q } from '@nozbe/watermelondb';
 import { STATUS } from '../constants';
-import type { CommunityState, Member, Resource, Drill } from '../domain/community';
+import type {
+  CommunityState,
+  Member,
+  Resource,
+  Drill,
+  Plan,
+  Message,
+} from '../domain/community';
 import { hashPassphrase, generateSalt } from '../crypto/keyDerivation';
 import { unlockCryptoWithPassphrase } from '../crypto/session';
 import { database } from './index';
@@ -9,6 +16,8 @@ import type MemberModel from './models/Member';
 import type ResourceModel from './models/Resource';
 import type DrillModel from './models/Drill';
 import type CheckInModel from './models/CheckIn';
+import type EmergencyPlanModel from './models/EmergencyPlan';
+import type MessageModel from './models/Message';
 import { randomUuid } from '../sync/uuid';
 import { DEFAULT_INVITE_TTL_MS } from '../constants/identity';
 import { notifyCommunityDataChanged } from '../sync/refreshHub';
@@ -63,6 +72,49 @@ function resourceToUi(r: ResourceModel): Resource {
   };
 }
 
+function decodeUtf8FromBase64(b64: string): string {
+  try {
+    const binary = atob(b64);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) {
+      bytes[i] = binary.charCodeAt(i);
+    }
+    return new TextDecoder('utf-8').decode(bytes);
+  } catch {
+    return '';
+  }
+}
+
+function emergencyPlanToUi(p: EmergencyPlanModel): Plan {
+  return {
+    id: p.id,
+    name: p.name,
+    description: decodeUtf8FromBase64(p.contentEncrypted),
+    actions: [],
+    createdAt: p.lastUpdated,
+    updatedAt: p.lastUpdated,
+  };
+}
+
+function mapMessageTypeToDomain(
+  t: MessageModel['messageType']
+): Message['type'] {
+  if (t === 'resource') return 'resource';
+  if (t === 'broadcast') return 'alert';
+  return 'text';
+}
+
+function messageToUi(m: MessageModel): Message {
+  return {
+    id: m.id,
+    senderId: m.senderId,
+    senderName: m.senderName,
+    content: decodeUtf8FromBase64(m.textEncrypted),
+    timestamp: m.timestamp,
+    type: mapMessageTypeToDomain(m.messageType),
+  };
+}
+
 function drillToUi(d: DrillModel): Drill {
   const stamps: number[] = [];
   if (d.isCompleted && d.completedAt) {
@@ -94,20 +146,36 @@ export async function loadCommunityStateFromDb(
     return null;
   }
 
-  const [memberRows, resourceRows, drillRows] = await Promise.all([
-    database
-      .get<MemberModel>('members')
-      .query(Q.where('community_id', watermelondbCommunityId))
-      .fetch(),
-    database
-      .get<ResourceModel>('resources')
-      .query(Q.where('community_id', watermelondbCommunityId))
-      .fetch(),
-    database
-      .get<DrillModel>('drills')
-      .query(Q.where('community_id', watermelondbCommunityId))
-      .fetch(),
-  ]);
+  const [memberRows, resourceRows, drillRows, planRows, messageRows] =
+    await Promise.all([
+      database
+        .get<MemberModel>('members')
+        .query(Q.where('community_id', watermelondbCommunityId))
+        .fetch(),
+      database
+        .get<ResourceModel>('resources')
+        .query(Q.where('community_id', watermelondbCommunityId))
+        .fetch(),
+      database
+        .get<DrillModel>('drills')
+        .query(Q.where('community_id', watermelondbCommunityId))
+        .fetch(),
+      database
+        .get<EmergencyPlanModel>('emergency_plans')
+        .query(Q.where('community_id', watermelondbCommunityId))
+        .fetch(),
+      database
+        .get<MessageModel>('messages')
+        .query(Q.where('community_id', watermelondbCommunityId))
+        .fetch(),
+    ]);
+
+  const plans = [...planRows]
+    .sort((a, b) => b.lastUpdated - a.lastUpdated)
+    .map(emergencyPlanToUi);
+  const messages = [...messageRows]
+    .sort((a, b) => b.timestamp - a.timestamp)
+    .map(messageToUi);
 
   return {
     communityId: community.id,
@@ -119,8 +187,8 @@ export async function loadCommunityStateFromDb(
     members: memberRows.filter((m) => !m.removedAt).map(memberToUi),
     resources: resourceRows.map(resourceToUi),
     drills: drillRows.map(drillToUi),
-    plans: [],
-    messages: [],
+    plans,
+    messages,
     achievements: [],
     readinessScore: 0,
     streakDays: 0,

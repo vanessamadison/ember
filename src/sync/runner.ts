@@ -13,6 +13,9 @@ export interface RelaySyncResult {
   merge?: {
     membersInserted: number;
     checkInsInserted: number;
+    emergencyPlansInserted: number;
+    messagesInserted: number;
+    drillsInserted: number;
   };
 }
 

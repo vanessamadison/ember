@@ -67,3 +67,11 @@ Use this only as a **team gate** for “we are comfortable demoing / small pilot
 | [MVP-DEPLOY.md](./MVP-DEPLOY.md) build channel matches what you installed | |
 
 Store submission, legal, and threat-model sign-off are separate from this engineering checklist.
+
+---
+
+## 5. Credibility and “crisis mesh” claims
+
+Use [STORE-CRISIS-MESH-BAR.md](./STORE-CRISIS-MESH-BAR.md) to separate **field evidence** (this summary, diagnostics, matrix updates) from **store readiness** (policy, pen-test narrative, support). Do not imply app-store certification of “crisis mesh” without that bar.
+
+After each pilot, add a row to [THREAT-MODEL-MATRIX.md](./THREAT-MODEL-MATRIX.md) section **8. Pilot results**.

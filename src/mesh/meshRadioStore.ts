@@ -8,6 +8,9 @@ export type MeshInboundLast =
       ok: true;
       membersInserted: number;
       checkInsInserted: number;
+      emergencyPlansInserted: number;
+      messagesInserted: number;
+      drillsInserted: number;
     }
   | {
       at: number;

@@ -5,21 +5,41 @@ import type Community from '../db/models/Community';
 import type Member from '../db/models/Member';
 import type CheckIn from '../db/models/CheckIn';
 import ResourceModel from '../db/models/Resource';
-import type { MembersCheckInsPayloadV1 } from './types';
+import type EmergencyPlan from '../db/models/EmergencyPlan';
+import type Message from '../db/models/Message';
+import type DrillModel from '../db/models/Drill';
+import type { PhaseBSyncPayload } from './types';
+import { PHASE_B_BUNDLE_VERSION } from './types';
 import {
   ensureCheckInSyncIdsForCommunity,
   ensureMemberPublicIdsForCommunity,
   ensureResourcePublicIdsForCommunity,
+  ensureEmergencyPlanPublicIdsForCommunity,
+  ensureMessagePublicIdsForCommunity,
+  ensureDrillPublicIdsForCommunity,
+  ensureDrillLastUpdatedForCommunity,
 } from './ensureIds';
 import { notifyCommunityDataChanged } from './refreshHub';
+
+export type MergePhaseBResult = {
+  localCommunityId: string;
+  membersInserted: number;
+  checkInsInserted: number;
+  emergencyPlansInserted: number;
+  messagesInserted: number;
+  drillsInserted: number;
+};
 
 /**
  * LWW merge for members by publicId (lastCheckIn wins; ties break by greater timestamp for other fields).
  * Check-ins merged by syncId (insert-only).
+ * Resources LWW by publicId + lastUpdated.
+ * Emergency plans LWW by publicId + lastUpdated.
+ * Messages insert-only by publicId (dedupe).
  */
 export async function mergeMembersCheckInsPayload(
-  payload: MembersCheckInsPayloadV1
-): Promise<{ localCommunityId: string; membersInserted: number; checkInsInserted: number }> {
+  payload: PhaseBSyncPayload
+): Promise<MergePhaseBResult> {
   const invite = normalizeInviteCode(payload.inviteCode);
   const communities = await database
     .get<Community>('communities')
@@ -37,9 +57,30 @@ export async function mergeMembersCheckInsPayload(
   await ensureMemberPublicIdsForCommunity(localCommunityId);
   await ensureCheckInSyncIdsForCommunity(localCommunityId);
   await ensureResourcePublicIdsForCommunity(localCommunityId);
+  await ensureEmergencyPlanPublicIdsForCommunity(localCommunityId);
+  await ensureMessagePublicIdsForCommunity(localCommunityId);
+  await ensureDrillPublicIdsForCommunity(localCommunityId);
+  await ensureDrillLastUpdatedForCommunity(localCommunityId);
 
   let membersInserted = 0;
   let checkInsInserted = 0;
+  let emergencyPlansInserted = 0;
+  let messagesInserted = 0;
+  let drillsInserted = 0;
+
+  const mergeEmergencyPlans =
+    payload.v === PHASE_B_BUNDLE_VERSION &&
+    payload.emergencyPlans &&
+    payload.emergencyPlans.length > 0;
+  const mergeMessages =
+    payload.v === PHASE_B_BUNDLE_VERSION &&
+    payload.messages &&
+    payload.messages.length > 0;
+
+  const mergeDrills =
+    payload.v === PHASE_B_BUNDLE_VERSION &&
+    payload.drills &&
+    payload.drills.length > 0;
 
   await database.write(async () => {
     if (
@@ -204,6 +245,120 @@ export async function mergeMembersCheckInsPayload(
       }
     }
 
+    if (mergeEmergencyPlans) {
+      for (const dto of payload.emergencyPlans!) {
+        if (!dto.publicId?.trim()) continue;
+        const existingPlan = await database
+          .get<EmergencyPlan>('emergency_plans')
+          .query(
+            Q.where('community_id', localCommunityId),
+            Q.where('public_id', dto.publicId.trim())
+          )
+          .fetch();
+        const row = existingPlan[0];
+        if (!row) {
+          await database.get<EmergencyPlan>('emergency_plans').create((p) => {
+            p.communityId = localCommunityId;
+            p.publicId = dto.publicId.trim();
+            p.name = dto.name;
+            p.planType = dto.planType;
+            p.contentEncrypted = dto.contentEncrypted;
+            p.sizeBytes = dto.sizeBytes;
+            p.status = dto.status;
+            p.lastUpdated = dto.lastUpdated;
+          });
+          emergencyPlansInserted += 1;
+        } else if (dto.lastUpdated >= row.lastUpdated) {
+          await row.update((p) => {
+            p.name = dto.name;
+            p.planType = dto.planType;
+            p.contentEncrypted = dto.contentEncrypted;
+            p.sizeBytes = dto.sizeBytes;
+            p.status = dto.status;
+            p.lastUpdated = dto.lastUpdated;
+          });
+        }
+      }
+    }
+
+    if (mergeMessages) {
+      const existingMsgIds = new Set<string>();
+      const localMsgs = await database
+        .get<Message>('messages')
+        .query(Q.where('community_id', localCommunityId))
+        .fetch();
+      for (const m of localMsgs) {
+        if (m.publicId?.trim()) existingMsgIds.add(m.publicId.trim());
+      }
+
+      for (const dto of payload.messages!) {
+        if (!dto.publicId?.trim() || existingMsgIds.has(dto.publicId.trim())) {
+          continue;
+        }
+        const senderWm = memberByPublic.get(dto.senderMemberPublicId.trim());
+        if (!senderWm) continue;
+
+        await database.get<Message>('messages').create((msg) => {
+          msg.communityId = localCommunityId;
+          msg.publicId = dto.publicId.trim();
+          msg.senderId = senderWm;
+          msg.senderName = dto.senderName;
+          msg.textEncrypted = dto.textEncrypted;
+          msg.messageType = dto.messageType;
+          msg.timestamp = dto.timestamp;
+          msg.isMesh = dto.isMesh;
+          msg.delivered = dto.delivered;
+        });
+        existingMsgIds.add(dto.publicId.trim());
+        messagesInserted += 1;
+      }
+    }
+
+    if (mergeDrills) {
+      for (const dto of payload.drills!) {
+        if (!dto.publicId?.trim()) continue;
+        const existingDrill = await database
+          .get<DrillModel>('drills')
+          .query(
+            Q.where('community_id', localCommunityId),
+            Q.where('public_id', dto.publicId.trim())
+          )
+          .fetch();
+        const row = existingDrill[0];
+        const localLu = row ? (row.lastUpdated ?? 0) : 0;
+        if (!row) {
+          await database.get<DrillModel>('drills').create((d) => {
+            d.communityId = localCommunityId;
+            d.publicId = dto.publicId.trim();
+            d.name = dto.name;
+            d.description = dto.description;
+            d.difficulty = dto.difficulty;
+            d.estimatedTime = dto.estimatedTime;
+            d.icon = dto.icon;
+            d.xpReward = dto.xpReward;
+            d.isCompleted = dto.isCompleted;
+            d.score = dto.score;
+            d.completedAt = dto.completedAt;
+            d.lastUpdated = dto.lastUpdated;
+          });
+          drillsInserted += 1;
+        } else if (dto.lastUpdated >= localLu) {
+          await row.update((d) => {
+            d.name = dto.name;
+            d.description = dto.description;
+            d.difficulty = dto.difficulty;
+            d.estimatedTime = dto.estimatedTime;
+            d.icon = dto.icon;
+            d.xpReward = dto.xpReward;
+            d.isCompleted = dto.isCompleted;
+            d.score = dto.score;
+            d.completedAt = dto.completedAt;
+            d.lastUpdated = dto.lastUpdated;
+          });
+        }
+      }
+    }
+
     const membersAll = await database
       .get<Member>('members')
       .query(Q.where('community_id', localCommunityId))
@@ -215,5 +370,12 @@ export async function mergeMembersCheckInsPayload(
   });
 
   notifyCommunityDataChanged();
-  return { localCommunityId, membersInserted, checkInsInserted };
+  return {
+    localCommunityId,
+    membersInserted,
+    checkInsInserted,
+    emergencyPlansInserted,
+    messagesInserted,
+    drillsInserted,
+  };
 }

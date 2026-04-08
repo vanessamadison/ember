@@ -330,7 +330,7 @@ export default function HomeScreen() {
               ]}
             >
               {meshInboundLast.ok
-                ? `Last mesh import ${new Date(meshInboundLast.at).toLocaleString()}: +${meshInboundLast.membersInserted} members, +${meshInboundLast.checkInsInserted} check-ins`
+                ? `Last mesh import ${new Date(meshInboundLast.at).toLocaleString()}: +${meshInboundLast.membersInserted} members, +${meshInboundLast.checkInsInserted} check-ins, +${meshInboundLast.emergencyPlansInserted} plans, +${meshInboundLast.messagesInserted} messages, +${meshInboundLast.drillsInserted} drills`
                 : `Last mesh import ${new Date(meshInboundLast.at).toLocaleString()}: ${meshInboundLast.reason}${meshInboundLast.detail ? ` — ${meshInboundLast.detail}` : ''}`}
             </Text>
           ) : null}

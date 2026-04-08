@@ -8,6 +8,9 @@ export type MeshInboundMergeResult =
       ok: true;
       membersInserted: number;
       checkInsInserted: number;
+      emergencyPlansInserted: number;
+      messagesInserted: number;
+      drillsInserted: number;
     }
   | {
       ok: false;
@@ -72,6 +75,9 @@ export async function mergeFromEmberMeshEnvelopeForCommunity(
       ok: true,
       membersInserted: r.membersInserted,
       checkInsInserted: r.checkInsInserted,
+      emergencyPlansInserted: r.emergencyPlansInserted,
+      messagesInserted: r.messagesInserted,
+      drillsInserted: r.drillsInserted,
     };
   } catch (e) {
     return {

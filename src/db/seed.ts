@@ -473,6 +473,7 @@ export async function seedDatabase(): Promise<void> {
             .get<Drill>('drills')
             .create((drill) => {
               drill.communityId = community.id;
+              drill.publicId = randomUuid();
               drill.name = d.name;
               drill.description = d.description;
               drill.difficulty = d.difficulty;
@@ -482,6 +483,7 @@ export async function seedDatabase(): Promise<void> {
               drill.isCompleted = d.completed;
               drill.score = d.score;
               drill.completedAt = d.completed ? oneDayAgo : 0;
+              drill.lastUpdated = d.completed ? oneDayAgo : now;
             })
         )
       );
@@ -532,6 +534,7 @@ export async function seedDatabase(): Promise<void> {
             .get<EmergencyPlan>('emergency_plans')
             .create((plan) => {
               plan.communityId = community.id;
+              plan.publicId = randomUuid();
               plan.name = p.name;
               plan.planType = p.type;
               plan.contentEncrypted = Buffer.from(p.content).toString('base64');
@@ -624,6 +627,7 @@ export async function seedDatabase(): Promise<void> {
             .get<Message>('messages')
             .create((message) => {
               message.communityId = community.id;
+              message.publicId = randomUuid();
               message.senderId = m.senderId;
               message.senderName = m.senderName;
               message.textEncrypted = Buffer.from(m.text).toString('base64');

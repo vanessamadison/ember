@@ -1,10 +1,21 @@
 export type {
   MembersCheckInsPayloadV1,
+  PhaseBSyncPayloadV2,
+  PhaseBSyncPayload,
   MemberSyncDTO,
   CheckInSyncDTO,
   ResourceSyncDTO,
+  EmergencyPlanSyncDTO,
+  MessageSyncDTO,
+  DrillSyncDTO,
 } from './types';
-export { MEMBERS_CHECK_INS_BUNDLE_VERSION } from './types';
+export {
+  MEMBERS_CHECK_INS_BUNDLE_VERSION,
+  PHASE_B_BUNDLE_VERSION,
+  isPhaseBSyncPayload,
+  isPhaseBSyncPayloadV2,
+} from './types';
+export type { MergePhaseBResult } from './merge';
 export {
   buildEncryptedMembersCheckInsBundle,
   buildEncryptedMembersCheckInsBundleForMesh,
@@ -23,7 +34,11 @@ export { syncMembersCheckInsViaRelay, type RelaySyncResult } from './runner';
 export { observeMembersCheckInsForCommunity } from './feed';
 export { getRelayBaseUrl } from './config';
 export { buildRelayAuthToken } from './relayAuth';
-export { ensureResourcePublicIdsForCommunity } from './ensureIds';
+export {
+  ensureResourcePublicIdsForCommunity,
+  ensureDrillPublicIdsForCommunity,
+  ensureDrillLastUpdatedForCommunity,
+} from './ensureIds';
 export {
   subscribeCommunityDataRefresh,
   notifyCommunityDataChanged,

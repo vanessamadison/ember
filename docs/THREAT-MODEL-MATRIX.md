@@ -2,7 +2,7 @@
 
 This matrix supports security design, pilot planning, and **funding conversations** by making threats and mitigations **explicit and tier-aware**. It is meant to be **versioned in git** and updated after pilots and reviews.
 
-**Companion docs:** [MVP-GUIDE.md](./MVP-GUIDE.md) (product and funding narrative), [MVP-DEPLOY.md](./MVP-DEPLOY.md), [PHASE-B-SYNC.md](./PHASE-B-SYNC.md).
+**Companion docs:** [MVP-GUIDE.md](./MVP-GUIDE.md) (product and funding narrative), [MVP-DEPLOY.md](./MVP-DEPLOY.md), [PHASE-B-SYNC.md](./PHASE-B-SYNC.md), [STORE-CRISIS-MESH-BAR.md](./STORE-CRISIS-MESH-BAR.md) (in-repo vs external gates).
 
 ---
 
@@ -144,17 +144,30 @@ Template for turning the matrix into **evidence**:
 | Event | Action |
 |-------|--------|
 | **Monthly** (pre-1.0) | Update L/I for rows touched by shipped code; mark controls Partial/Shipped. |
-| **Per pilot** | Add incidents; adjust mitigations; fill §6 table. |
+| **Per pilot** | Add incidents; adjust mitigations; fill §6 metrics and §8 results summary. |
 | **Pre-funding deck** | Export summary: top 10 residual **H/H or H/M** risks + mitigations in flight. |
 | **Major hardware rev** | Refresh Tier 2–3 rows; add BOM/firmware version references. |
 
 ---
 
-## 8. Version history
+## 8. Pilot results (append after each field run)
+
+Paste or summarize from [PILOT-FIELD-SUMMARY.md](./PILOT-FIELD-SUMMARY.md). Link diagnostics under version control or a private store; **do not** commit channel PSKs.
+
+| Pilot ID | Date | Build (SHA / EAS) | Hardware (nodes) | Pass / partial / fail | Top incidents (matrix IDs) | Stated limits for external comms |
+|----------|------|-------------------|------------------|------------------------|----------------------------|----------------------------------|
+| (example) | | | | | | Mesh prototype; no store certification claimed |
+
+**Stated limits** should match [STORE-CRISIS-MESH-BAR.md](./STORE-CRISIS-MESH-BAR.md) — e.g. Phase B entities synced, Meshtastic keying outside EMBER, no third-party pen test unless listed.
+
+---
+
+## 9. Version history
 
 | Version | Date | Notes |
 |---------|------|-------|
 | 0.1 | 2026-04-04 | Initial matrix scaffold: tiers 1–3, cross-tier, usage and pilot sections |
+| 0.2 | 2026-04-04 | Added §8 pilot results template; companion link to store-credibility bar doc |
 
 ---
 

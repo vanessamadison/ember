@@ -37,6 +37,8 @@
 
 Further ideas: optional **auto-lower** without prior failure bump (RF inference). **File share export** is implemented (`Share mesh diagnostic` + `expo-sharing`).
 
+- [x] **BLE scan preflight** — Tapping **Scan for Meshtastic radios** when Bluetooth is not ready shows an **alert** with platform copy from `bleMeshGuidance` and optional **Open system settings** (`src/mesh/meshBleScanPreflight.ts`). The scan button stays tappable so users get feedback instead of a dead control.
+
 ---
 
 ## 4. References

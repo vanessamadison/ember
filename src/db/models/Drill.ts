@@ -33,5 +33,9 @@ export default class Drill extends Model {
 
   @field('completed_at') completedAt!: number;
 
+  @text('public_id') publicId?: string;
+
+  @field('last_updated') lastUpdated?: number;
+
   @relation('community', 'community_id') community!: any;
 }

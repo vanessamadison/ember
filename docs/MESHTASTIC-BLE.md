@@ -2,7 +2,7 @@
 
 This document describes how EMBER talks to Meshtastic radios over Bluetooth Low Energy in **development builds** (not Expo Go). It complements `docs/ARCHITECTURE.md` section **5.2 Meshtastic Integration**.
 
-**Field pilots:** use [MESH-FIELD-TEST.md](./MESH-FIELD-TEST.md) (includes a copy-paste log template). **Rolling improvements:** [PLAN-FIELD-MESH-POLISH.md](./PLAN-FIELD-MESH-POLISH.md).
+**Field pilots:** use [MESH-FIELD-TEST.md](./MESH-FIELD-TEST.md) (includes a copy-paste log template). **Rolling improvements:** [PLAN-FIELD-MESH-POLISH.md](./PLAN-FIELD-MESH-POLISH.md). **Node PSK / firmware (operator):** [MESHTASTIC-NODE-SECURITY.md](./MESHTASTIC-NODE-SECURITY.md). **Credibility vs store bar:** [STORE-CRISIS-MESH-BAR.md](./STORE-CRISIS-MESH-BAR.md). **Settings → Mesh Network** includes a **Node security checklist** (local pilot aid; EMBER does not set Meshtastic keys over BLE).
 
 ## What works today
 
@@ -24,6 +24,7 @@ This document describes how EMBER talks to Meshtastic radios over Bluetooth Low 
 - **Welcome** — Onboarding includes a **Tier 2** card: native build only, **Config → Mesh Network**, permission expectations, crisis path to Config.
 - **Deep link** — `/(tabs)/settings?section=mesh` opens Config with **Mesh Network** expanded and scrolled into view (Home **Config** uses `navigateToMeshSettings()` which bumps a focus token when the Config tab is already active so params may not update). After handling, the `section` query param is cleared to avoid re-expanding on every revisit.
 - **First scan** — On **Mesh Network**, when Bluetooth is already **On**, a short **first-time pairing** hint explains tap **Scan**, accept OS prompts, and fix denials in system app settings.
+- **Scan preflight** — If Bluetooth is off or permission is missing, **Scan for Meshtastic radios** still responds: `runBleScanPreflight` (`src/mesh/meshBleScanPreflight.ts`) shows an **alert** with `bleMeshGuidance` copy and optional **Open system settings** before any scan starts.
 - **Android 12+** — Runtime **Nearby devices** / Bluetooth scan often appears on the first scan; `requestBleScanRuntimePermissions` runs before `startScan`.
 - **iOS** — Bluetooth permission and adapter state; **Open system settings** when the mesh guidance suggests it.
 - **Diagnostics** — **Copy mesh diagnostic report** / **Share mesh diagnostic** build the same plaintext (state + last import + digest buffer). Share writes a UTF-8 `.txt` in cache and opens the system share sheet (`expo-sharing`); falls back to `Share.share` when needed.
@@ -92,6 +93,7 @@ Parsing is **best-effort**: bad magic, version, or length returns null / throws 
 | `src/sync/meshInboundMerge.ts` | Fingerprint check → decrypt Phase B bundle → `mergeMembersCheckInsPayload` |
 | `src/sync/MeshSyncInboundBridge.tsx` | Subscribes mesh envelopes into merge (mounted in `app/_layout.tsx`) |
 | `src/mesh/bleUserStrings.ts` | Bluetooth state labels and Settings guidance (P2) |
+| `src/mesh/meshBleScanPreflight.ts` | Alert before BLE scan when adapter is not ready |
 | `src/mesh/fromRadioSummary.ts` | Short UI-safe lines from decoded messages |
 | `src/context/MeshRadioContext.tsx` | `MeshRadioProvider`, `useMeshRadio()` |
 | `app/_layout.tsx` | Mounts `MeshRadioProvider` under community root |

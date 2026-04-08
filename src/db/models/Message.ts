@@ -30,6 +30,8 @@ export default class Message extends Model {
 
   @field('delivered') delivered!: boolean;
 
+  @text('public_id') publicId?: string;
+
   @readonly @date('timestamp') timestampDate!: Date;
 
   @relation('community', 'community_id') community!: any;
