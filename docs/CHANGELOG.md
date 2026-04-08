@@ -4,6 +4,22 @@ All notable changes to this repository are documented here. The format is loosel
 
 ## Unreleased
 
+### Phase B sync & data
+
+- **Bundle v2** — Encrypted payloads can include **emergency plans**, **messages**, and **drills** (DTOs in `src/sync/types.ts`); **v1** bundles still import. **LWW** merge for plans and drills; **insert-only** messages (by `public_id` + sender member `public_id`). Mesh trim order: messages → plans → drills → resources → check-ins.
+- **Schema** — `public_id` / `last_updated` on `emergency_plans`, `messages`, `drills` (migrations); `ensureIds` backfills.
+- **Drill completion** — **Start drill** on **Drills** persists to SQLite via **`persistDrillCompletion`** (`is_completed`, `completed_at`, `score`, `last_updated`) so completions sync across devices; domain **`Drill`** includes **`durationMinutes`**, **`xpReward`**, **`score`**.
+
+### Security & repository (public)
+
+- **`.gitignore`** — Broader `.env.*` ignore with **`!.env.example`**; patterns for keystores, **`credentials.json`**, service-account JSON, **`eas-credentials/`**, **`relay/.env`**.
+- **`docs/NEXT-PHASE.md`** — Pilot → hardening → distribution priorities; secret checklist.
+- **`README.md`** — Short pointer to public-repo hygiene and roadmap doc.
+
+### BLE UX
+
+- **Scan preflight** — **`runBleScanPreflight`** (`src/mesh/meshBleScanPreflight.ts`): if Bluetooth is not ready, an **alert** explains next steps before scan; scan button stays tappable for feedback.
+
 ### Mesh (Meshtastic / Phase B)
 
 - **Crisis UX** — Bottom tab for the community roster is **People** (not “Mesh”); in-crisis copy on the roster screen points mesh tooling to **Status** and **Config**.

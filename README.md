@@ -214,7 +214,8 @@ ember/
 │   └── utils/                    # Utility functions
 ├── assets/                       # Logo, splash, icons
 ├── docs/
-│   ├── CHANGELOG.md              # Notable changes (see table above)
+│   ├── CHANGELOG.md              # Notable changes
+│   ├── NEXT-PHASE.md           # Roadmap, public-repo hygiene, hardware order
 │   └── ARCHITECTURE.md           # Full technical specification
 ├── package.json
 ├── app.json                      # Expo config
@@ -222,6 +223,10 @@ ember/
 ├── tsconfig.json
 └── LICENSE                       # AGPL v3
 ```
+
+## Public repo, secrets & roadmap
+
+Keeping the repo public is fine if secrets stay out of git (see root `.gitignore`, `.env.example`, and **[docs/NEXT-PHASE.md](docs/NEXT-PHASE.md)** for priorities: pilot evidence → hardening → store/distribution).
 
 ## Contributing
 

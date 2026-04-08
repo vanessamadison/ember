@@ -33,8 +33,14 @@ export interface Drill {
   name: string;
   description: string;
   difficulty: 'easy' | 'med' | 'hard';
+  /** Minutes (from Watermelon `estimated_time`). */
+  durationMinutes: number;
   completedAt: number[];
   participantCount: number;
+  /** Set when completed; from Watermelon `score`. */
+  score?: number;
+  /** From Watermelon `xp_reward`. */
+  xpReward: number;
 }
 
 export interface Plan {

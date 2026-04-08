@@ -18,6 +18,7 @@ import {
   loadCommunityStateFromDb,
   persistMemberCheckIn,
   persistResourceQuantity,
+  persistDrillCompletion,
 } from '../db/communityLifecycle';
 import { subscribeCommunityDataRefresh } from '../sync/refreshHub';
 import { useApp } from './AppContext';
@@ -150,18 +151,25 @@ const createCommunityStore = (communityId: string) => {
             },
           ],
         })),
-      completeDrill: (drillId: string) =>
+      completeDrill: (drillId: string) => {
+        const ts = Date.now();
         set((state) => ({
-          drills: state.drills.map((d) =>
-            d.id === drillId
-              ? {
-                  ...d,
-                  completedAt: [...d.completedAt, Date.now()],
-                  participantCount: d.participantCount + 1,
-                }
-              : d
-          ),
-        })),
+          drills: state.drills.map((d) => {
+            if (d.id !== drillId) return d;
+            const first = d.completedAt.length === 0;
+            return {
+              ...d,
+              completedAt: first ? [ts] : d.completedAt,
+              participantCount: first ? d.participantCount + 1 : d.participantCount,
+            };
+          }),
+        }));
+        if (shouldPersist) {
+          void persistDrillCompletion(drillId).catch((err) =>
+            console.error('[ember] persistDrillCompletion', err)
+          );
+        }
+      },
       addMember: (member: Omit<Member, 'xp' | 'level'>) =>
         set((state) => ({
           members: [

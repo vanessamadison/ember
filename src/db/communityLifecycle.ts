@@ -125,9 +125,36 @@ function drillToUi(d: DrillModel): Drill {
     name: d.name,
     description: d.description,
     difficulty: mapDifficulty(d.difficulty),
+    durationMinutes: d.estimatedTime,
     completedAt: stamps,
     participantCount: d.isCompleted ? 1 : 0,
+    score: d.isCompleted ? d.score : undefined,
+    xpReward: d.xpReward,
   };
+}
+
+/**
+ * Marks a drill completed in SQLite, assigns `public_id` / `last_updated` for Phase B sync.
+ */
+export async function persistDrillCompletion(drillId: string): Promise<void> {
+  await database.write(async () => {
+    const row = await database.get<DrillModel>('drills').find(drillId);
+    const now = Date.now();
+    await row.update((d) => {
+      if (!d.publicId?.trim()) {
+        d.publicId = randomUuid();
+      }
+      if (!d.isCompleted) {
+        d.isCompleted = true;
+        d.completedAt = now;
+        if (!d.score || d.score <= 0) {
+          d.score = Math.min(100, 75 + Math.floor(Math.random() * 26));
+        }
+      }
+      d.lastUpdated = now;
+    });
+  });
+  notifyCommunityDataChanged();
 }
 
 export async function loadCommunityStateFromDb(

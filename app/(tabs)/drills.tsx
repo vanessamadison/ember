@@ -103,7 +103,7 @@ const styles = StyleSheet.create({
 
 export default function DrillsScreen() {
   const { mode } = useApp();
-  const { drills, drillAverage, totalXP } = useCommunity();
+  const { drills, drillAverage, totalXP, completeDrill } = useCommunity();
   const theme = getTheme(mode);
 
   const completedCount = useMemo(() => {
@@ -171,11 +171,13 @@ export default function DrillsScreen() {
                     name: drill.name,
                     description: drill.description,
                     difficulty: drill.difficulty,
-                    timeMinutes: 20,
-                    xpReward: 50,
+                    timeMinutes: drill.durationMinutes,
+                    xpReward: drill.xpReward,
                     completed: drill.completedAt.length > 0,
+                    score: drill.score,
                   }}
                   accent={theme.accent}
+                  onStart={completeDrill}
                 />
               </View>
             )}

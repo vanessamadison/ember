@@ -16,12 +16,25 @@ android/
 *.mobileprovision
 *.orig.*
 
-# Environment
+# Environment (keep .env.example tracked)
 .env
+.env.*
+!.env.example
 .env.local
 .env.development.local
 .env.test.local
 .env.production.local
+
+# Secrets & store / cloud credentials (never commit real files)
+*.keystore
+*.jks
+credentials.json
+**/service-account*.json
+**/google-play-service-account*.json
+eas-credentials/
+
+# Local relay overrides
+relay/.env
 
 # IDE
 .vscode/
